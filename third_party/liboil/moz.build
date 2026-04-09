@@ -18,6 +18,8 @@ if CONFIG["INTEL_ARCHITECTURE"]:
     SOURCES += ["oil_resample_sse2.c"]
     SOURCES["oil_resample_sse2.c"].flags += CONFIG["SSE2_FLAGS"]
     SOURCES += ["oil_resample_avx2.c"]
+    # -mfma is required: the AVX2 downscale paths use _mm_fmadd_ps / _mm256_fmadd_ps.
+    # All AVX2-capable CPUs also support FMA3 (Haswell+).
     SOURCES["oil_resample_avx2.c"].flags += ["-mavx2", "-mfma"]
 
 # NEON path for aarch64
