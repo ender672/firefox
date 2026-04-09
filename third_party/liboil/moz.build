@@ -1,0 +1,29 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+with Files("**"):
+    BUG_COMPONENT = ("Core", "Graphics: ImageLib")
+
+EXPORTS += [
+    "oil_resample.h",
+]
+
+SOURCES += [
+    "oil_resample.c",
+]
+
+# SSE2 path for x86/x64
+if CONFIG["INTEL_ARCHITECTURE"]:
+    SOURCES += ["oil_resample_sse2.c"]
+    SOURCES["oil_resample_sse2.c"].flags += CONFIG["SSE2_FLAGS"]
+    SOURCES += ["oil_resample_avx2.c"]
+    SOURCES["oil_resample_avx2.c"].flags += ["-mavx2", "-mfma"]
+
+# NEON path for aarch64
+if CONFIG["TARGET_CPU"] == "aarch64":
+    SOURCES += ["oil_resample_neon.c"]
+
+FINAL_LIBRARY = "xul"
+
+AllowCompilerWarnings()

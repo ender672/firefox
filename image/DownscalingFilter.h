@@ -23,7 +23,9 @@
 #include "mozilla/gfx/2D.h"
 
 #include "mozilla/gfx/ConvolutionFilter.h"
+#include "mozilla/StaticPrefs_image.h"
 
+#include "OilDownscaler.h"
 #include "SurfacePipe.h"
 
 namespace mozilla {
@@ -63,7 +65,8 @@ class DownscalingFilter final : public SurfaceFilter {
         mRowsInWindow(0),
         mInputRow(0),
         mOutputRow(0),
-        mFormat(gfx::SurfaceFormat::UNKNOWN) {}
+        mFormat(gfx::SurfaceFormat::UNKNOWN),
+        mUseOil(false) {}
 
   ~DownscalingFilter() { ReleaseWindow(); }
 
@@ -97,16 +100,28 @@ class DownscalingFilter final : public SurfaceFilter {
         gfx::MatrixScalesDouble(double(mInputSize.width) / outputSize.width,
                                 double(mInputSize.height) / outputSize.height);
     mFormat = aConfig.mFormat;
+    mUseOil = StaticPrefs::image_downscaler_use_oil();
 
-    ReleaseWindow();
+    if (mUseOil) {
+      if (!mOilDownscaler.Init(mInputSize.width, mInputSize.height,
+                               outputSize.width, outputSize.height,
+                               aConfig.mFormat)) {
+        NS_WARNING("Failed to initialize liboil downscaler, falling back");
+        mUseOil = false;
+      }
+    }
 
-    auto resizeMethod = gfx::ConvolutionFilter::ResizeMethod::LANCZOS3;
-    if (!mXFilter.ComputeResizeFilter(resizeMethod, mInputSize.width,
-                                      outputSize.width) ||
-        !mYFilter.ComputeResizeFilter(resizeMethod, mInputSize.height,
-                                      outputSize.height)) {
-      NS_WARNING("Failed to compute filters for image downscaling");
-      return NS_ERROR_OUT_OF_MEMORY;
+    if (!mUseOil) {
+      ReleaseWindow();
+
+      auto resizeMethod = gfx::ConvolutionFilter::ResizeMethod::LANCZOS3;
+      if (!mXFilter.ComputeResizeFilter(resizeMethod, mInputSize.width,
+                                        outputSize.width) ||
+          !mYFilter.ComputeResizeFilter(resizeMethod, mInputSize.height,
+                                        outputSize.height)) {
+        NS_WARNING("Failed to compute filters for image downscaling");
+        return NS_ERROR_OUT_OF_MEMORY;
+      }
     }
 
     // Allocate the buffer, which contains scanlines of the input image.
@@ -119,29 +134,31 @@ class DownscalingFilter final : public SurfaceFilter {
     // Clear the buffer to avoid writing uninitialized memory to the output.
     memset(mRowBuffer.get(), 0, PaddedWidthInBytes(mInputSize.width));
 
-    // Allocate the window, which contains horizontally downscaled scanlines.
-    // (We can store scanlines which are already downscaled because our
-    // downscaling filter is separable.)
-    mWindowCapacity = mYFilter.MaxFilter();
-    mWindow.reset(new (fallible) uint8_t*[mWindowCapacity]);
-    if (MOZ_UNLIKELY(!mWindow)) {
-      return NS_ERROR_OUT_OF_MEMORY;
-    }
+    if (!mUseOil) {
+      // Allocate the window, which contains horizontally downscaled scanlines.
+      // (We can store scanlines which are already downscaled because our
+      // downscaling filter is separable.)
+      mWindowCapacity = mYFilter.MaxFilter();
+      mWindow.reset(new (fallible) uint8_t*[mWindowCapacity]);
+      if (MOZ_UNLIKELY(!mWindow)) {
+        return NS_ERROR_OUT_OF_MEMORY;
+      }
 
-    // Allocate the "window" of recent rows that we keep in memory as input for
-    // the downscaling code. We intentionally iterate through the entire array
-    // even if an allocation fails, to ensure that all the pointers in it are
-    // either valid or nullptr. That in turn ensures that ReleaseWindow() can
-    // clean up correctly.
-    bool anyAllocationFailed = false;
-    const size_t windowRowSizeInBytes = PaddedWidthInBytes(outputSize.width);
-    for (int32_t i = 0; i < mWindowCapacity; ++i) {
-      mWindow[i] = new (fallible) uint8_t[windowRowSizeInBytes];
-      anyAllocationFailed = anyAllocationFailed || mWindow[i] == nullptr;
-    }
+      // Allocate the "window" of recent rows that we keep in memory as input
+      // for the downscaling code. We intentionally iterate through the entire
+      // array even if an allocation fails, to ensure that all the pointers in
+      // it are either valid or nullptr. That in turn ensures that
+      // ReleaseWindow() can clean up correctly.
+      bool anyAllocationFailed = false;
+      const size_t windowRowSizeInBytes = PaddedWidthInBytes(outputSize.width);
+      for (int32_t i = 0; i < mWindowCapacity; ++i) {
+        mWindow[i] = new (fallible) uint8_t[windowRowSizeInBytes];
+        anyAllocationFailed = anyAllocationFailed || mWindow[i] == nullptr;
+      }
 
-    if (MOZ_UNLIKELY(anyAllocationFailed)) {
-      return NS_ERROR_OUT_OF_MEMORY;
+      if (MOZ_UNLIKELY(anyAllocationFailed)) {
+        return NS_ERROR_OUT_OF_MEMORY;
+      }
     }
 
     ConfigureFilter(mInputSize, sizeof(uint32_t));
@@ -167,6 +184,10 @@ class DownscalingFilter final : public SurfaceFilter {
     mOutputRow = 0;
     mRowsInWindow = 0;
 
+    if (mUseOil) {
+      mOilDownscaler.Reset();
+    }
+
     return GetRowPointer();
   }
 
@@ -179,6 +200,12 @@ class DownscalingFilter final : public SurfaceFilter {
     if (mOutputRow >= mNext.InputSize().height) {
       NS_WARNING("Advancing DownscalingFilter past the end of the output");
       return nullptr;
+    }
+
+    if (mUseOil) {
+      OilAdvanceRow(aInputRow);
+      mInputRow++;
+      return mInputRow < mInputSize.height ? GetRowPointer() : nullptr;
     }
 
     int32_t filterOffset = 0;
@@ -269,6 +296,22 @@ class DownscalingFilter final : public SurfaceFilter {
     }
   }
 
+  void OilAdvanceRow(const uint8_t* aInputRow) {
+    MOZ_ASSERT(mUseOil);
+
+    if (mOilDownscaler.Slots() > 0) {
+      mOilDownscaler.FeedRow(aInputRow);
+    }
+
+    while (mOilDownscaler.Slots() == 0 && !mOilDownscaler.OutputComplete()) {
+      mNext.template WriteUnsafeComputedRow<uint32_t>(
+          [&](uint32_t* aRow, uint32_t aLength) {
+            mOilDownscaler.ProduceRow(reinterpret_cast<uint8_t*>(aRow));
+          });
+      mOutputRow++;
+    }
+  }
+
   void ReleaseWindow() {
     if (!mWindow) {
       return;
@@ -302,6 +345,9 @@ class DownscalingFilter final : public SurfaceFilter {
   int32_t mOutputRow;     /// The current row we're writing. (0-indexed)
 
   gfx::SurfaceFormat mFormat;  /// The image format
+
+  OilDownscaler mOilDownscaler;
+  bool mUseOil;
 };
 
 }  // namespace image

@@ -8598,6 +8598,11 @@
   value: true
   mirror: always
 
+- name: image.downscaler.use-oil
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
 # Whether EXIF density metadata is sanity checked against PixelXDimension and PixelYDimension
 - name: image.exif-density-correction.sanity-check.enabled
   type: RelaxedAtomicBool

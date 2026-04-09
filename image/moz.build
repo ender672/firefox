@@ -114,7 +114,10 @@ UNIFIED_SOURCES += [
     "VectorImage.cpp",
 ]
 
-UNIFIED_SOURCES += ["Downscaler.cpp"]
+UNIFIED_SOURCES += [
+    "Downscaler.cpp",
+    "OilDownscaler.cpp",
+]
 
 if CONFIG["MOZ_WIDGET_TOOLKIT"] == "windows":
     SOURCES += ["DecodePool.cpp"]
@@ -124,6 +127,12 @@ else:
 include("/ipc/chromium/chromium-config.mozbuild")
 
 FINAL_LIBRARY = "xul"
+
+# SIMD dispatch for OilDownscaler
+if CONFIG["INTEL_ARCHITECTURE"]:
+    DEFINES["USE_SSE2"] = True
+if CONFIG["TARGET_CPU"] == "aarch64":
+    DEFINES["USE_NEON"] = True
 
 LOCAL_INCLUDES += [
     # Because SVGDocumentWrapper.cpp includes "mozilla/dom/SVGSVGElement.h"
@@ -137,6 +146,8 @@ LOCAL_INCLUDES += [
     "/netwerk/base",
     # For nsHttpChannel.h
     "/netwerk/protocol/http",
+    # For liboil downscaler
+    "/third_party/liboil",
     # DecodePool uses thread-related facilities.
     "/xpcom/threads",
 ]

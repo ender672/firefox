@@ -5,6 +5,7 @@
 #include "gtest/gtest.h"
 
 #include "mozilla/gfx/2D.h"
+#include "mozilla/Preferences.h"
 #include "Common.h"
 #include "Decoder.h"
 #include "DecoderFactory.h"
@@ -15,6 +16,16 @@
 using namespace mozilla;
 using namespace mozilla::gfx;
 using namespace mozilla::image;
+
+static void ForEachBackend(std::function<void()> aFunc) {
+  Preferences::SetBool("image.downscaler.use-oil", false);
+  aFunc();
+
+  Preferences::SetBool("image.downscaler.use-oil", true);
+  aFunc();
+
+  Preferences::SetBool("image.downscaler.use-oil", false);
+}
 
 template <typename Func>
 void WithDownscalingFilter(const IntSize& aInputSize,
@@ -60,22 +71,26 @@ TEST(ImageDownscalingFilter, WritePixels100_100to33_33)
 
 TEST(ImageDownscalingFilter, WritePixels100_100to1_1)
 {
-  WithDownscalingFilter(IntSize(100, 100), IntSize(1, 1),
-                        [](image::Decoder* aDecoder, SurfaceFilter* aFilter) {
-                          CheckWritePixels(
-                              aDecoder, aFilter,
-                              /* aOutputRect = */ Some(IntRect(0, 0, 1, 1)));
-                        });
+  ForEachBackend([] {
+    WithDownscalingFilter(IntSize(100, 100), IntSize(1, 1),
+                          [](image::Decoder* aDecoder, SurfaceFilter* aFilter) {
+                            CheckWritePixels(
+                                aDecoder, aFilter,
+                                /* aOutputRect = */ Some(IntRect(0, 0, 1, 1)));
+                          });
+  });
 }
 
 TEST(ImageDownscalingFilter, WritePixels100_100to33_99)
 {
-  WithDownscalingFilter(IntSize(100, 100), IntSize(33, 99),
-                        [](image::Decoder* aDecoder, SurfaceFilter* aFilter) {
-                          CheckWritePixels(
-                              aDecoder, aFilter,
-                              /* aOutputRect = */ Some(IntRect(0, 0, 33, 99)));
-                        });
+  ForEachBackend([] {
+    WithDownscalingFilter(IntSize(100, 100), IntSize(33, 99),
+                          [](image::Decoder* aDecoder, SurfaceFilter* aFilter) {
+                            CheckWritePixels(
+                                aDecoder, aFilter,
+                                /* aOutputRect = */ Some(IntRect(0, 0, 33, 99)));
+                          });
+  });
 }
 
 TEST(ImageDownscalingFilter, WritePixels100_100to99_33)
@@ -146,84 +161,88 @@ TEST(ImageDownscalingFilter, DownscalingFailsFor100_100toMinus1_Minus1)
 
 TEST(ImageDownscalingFilter, WritePixelsOutput100_100to20_20)
 {
-  WithDownscalingFilter(
-      IntSize(100, 100), IntSize(20, 20),
-      [](image::Decoder* aDecoder, SurfaceFilter* aFilter) {
-        // Fill the image. It consists of 25 lines of green, followed by 25
-        // lines of red, followed by 25 lines of green, followed by 25 more
-        // lines of red.
-        uint32_t count = 0;
-        auto result =
-            aFilter->WritePixels<uint32_t>([&]() -> NextPixel<uint32_t> {
-              uint32_t color =
-                  (count <= 25 * 100) || (count > 50 * 100 && count <= 75 * 100)
-                      ? BGRAColor::Green().AsPixel()
-                      : BGRAColor::Red().AsPixel();
-              ++count;
-              return AsVariant(color);
-            });
-        EXPECT_EQ(WriteState::FINISHED, result);
-        EXPECT_EQ(100u * 100u, count);
+  ForEachBackend([] {
+    WithDownscalingFilter(
+        IntSize(100, 100), IntSize(20, 20),
+        [](image::Decoder* aDecoder, SurfaceFilter* aFilter) {
+          // Fill the image. It consists of 25 lines of green, followed by 25
+          // lines of red, followed by 25 lines of green, followed by 25 more
+          // lines of red.
+          uint32_t count = 0;
+          auto result =
+              aFilter->WritePixels<uint32_t>([&]() -> NextPixel<uint32_t> {
+                uint32_t color =
+                    (count <= 25 * 100) || (count > 50 * 100 && count <= 75 * 100)
+                        ? BGRAColor::Green().AsPixel()
+                        : BGRAColor::Red().AsPixel();
+                ++count;
+                return AsVariant(color);
+              });
+          EXPECT_EQ(WriteState::FINISHED, result);
+          EXPECT_EQ(100u * 100u, count);
 
-        AssertCorrectPipelineFinalState(aFilter, IntRect(0, 0, 100, 100),
-                                        IntRect(0, 0, 20, 20));
+          AssertCorrectPipelineFinalState(aFilter, IntRect(0, 0, 100, 100),
+                                          IntRect(0, 0, 20, 20));
 
-        // Check that the generated image is correct. Note that we skip rows
-        // near the transitions between colors, since the downscaler does not
-        // produce a sharp boundary at these points. Even some of the rows we
-        // test need a small amount of fuzz; this is just the nature of Lanczos
-        // downscaling.
-        RawAccessFrameRef currentFrame = aDecoder->GetCurrentFrameRef();
-        RefPtr<SourceSurface> surface = currentFrame->GetSourceSurface();
-        EXPECT_TRUE(RowsAreSolidColor(surface, 0, 4, BGRAColor::Green(),
-                                      /* aFuzz = */ 2));
-        EXPECT_TRUE(RowsAreSolidColor(surface, 6, 3, BGRAColor::Red(),
-                                      /* aFuzz = */ 3));
-        EXPECT_TRUE(RowsAreSolidColor(surface, 11, 3, BGRAColor::Green(),
-                                      /* aFuzz = */ 3));
-        EXPECT_TRUE(RowsAreSolidColor(surface, 16, 4, BGRAColor::Red(),
-                                      /* aFuzz = */ 3));
-      });
+          // Check that the generated image is correct. Note that we skip rows
+          // near the transitions between colors, since the downscaler does not
+          // produce a sharp boundary at these points. Even some of the rows we
+          // test need a small amount of fuzz; this is just the nature of Lanczos
+          // downscaling.
+          RawAccessFrameRef currentFrame = aDecoder->GetCurrentFrameRef();
+          RefPtr<SourceSurface> surface = currentFrame->GetSourceSurface();
+          EXPECT_TRUE(RowsAreSolidColor(surface, 0, 4, BGRAColor::Green(),
+                                        /* aFuzz = */ 2));
+          EXPECT_TRUE(RowsAreSolidColor(surface, 6, 3, BGRAColor::Red(),
+                                        /* aFuzz = */ 3));
+          EXPECT_TRUE(RowsAreSolidColor(surface, 11, 3, BGRAColor::Green(),
+                                        /* aFuzz = */ 3));
+          EXPECT_TRUE(RowsAreSolidColor(surface, 16, 4, BGRAColor::Red(),
+                                        /* aFuzz = */ 3));
+        });
+  });
 }
 
 TEST(ImageDownscalingFilter, WritePixelsOutput100_100to10_20)
 {
-  WithDownscalingFilter(
-      IntSize(100, 100), IntSize(10, 20),
-      [](image::Decoder* aDecoder, SurfaceFilter* aFilter) {
-        // Fill the image. It consists of 25 lines of green, followed by 25
-        // lines of red, followed by 25 lines of green, followed by 25 more
-        // lines of red.
-        uint32_t count = 0;
-        auto result =
-            aFilter->WritePixels<uint32_t>([&]() -> NextPixel<uint32_t> {
-              uint32_t color =
-                  (count <= 25 * 100) || (count > 50 * 100 && count <= 75 * 100)
-                      ? BGRAColor::Green().AsPixel()
-                      : BGRAColor::Red().AsPixel();
-              ++count;
-              return AsVariant(color);
-            });
-        EXPECT_EQ(WriteState::FINISHED, result);
-        EXPECT_EQ(100u * 100u, count);
+  ForEachBackend([] {
+    WithDownscalingFilter(
+        IntSize(100, 100), IntSize(10, 20),
+        [](image::Decoder* aDecoder, SurfaceFilter* aFilter) {
+          // Fill the image. It consists of 25 lines of green, followed by 25
+          // lines of red, followed by 25 lines of green, followed by 25 more
+          // lines of red.
+          uint32_t count = 0;
+          auto result =
+              aFilter->WritePixels<uint32_t>([&]() -> NextPixel<uint32_t> {
+                uint32_t color =
+                    (count <= 25 * 100) || (count > 50 * 100 && count <= 75 * 100)
+                        ? BGRAColor::Green().AsPixel()
+                        : BGRAColor::Red().AsPixel();
+                ++count;
+                return AsVariant(color);
+              });
+          EXPECT_EQ(WriteState::FINISHED, result);
+          EXPECT_EQ(100u * 100u, count);
 
-        AssertCorrectPipelineFinalState(aFilter, IntRect(0, 0, 100, 100),
-                                        IntRect(0, 0, 10, 20));
+          AssertCorrectPipelineFinalState(aFilter, IntRect(0, 0, 100, 100),
+                                          IntRect(0, 0, 10, 20));
 
-        // Check that the generated image is correct. Note that we skip rows
-        // near the transitions between colors, since the downscaler does not
-        // produce a sharp boundary at these points. Even some of the rows we
-        // test need a small amount of fuzz; this is just the nature of Lanczos
-        // downscaling.
-        RawAccessFrameRef currentFrame = aDecoder->GetCurrentFrameRef();
-        RefPtr<SourceSurface> surface = currentFrame->GetSourceSurface();
-        EXPECT_TRUE(RowsAreSolidColor(surface, 0, 4, BGRAColor::Green(),
-                                      /* aFuzz = */ 2));
-        EXPECT_TRUE(RowsAreSolidColor(surface, 6, 3, BGRAColor::Red(),
-                                      /* aFuzz = */ 3));
-        EXPECT_TRUE(RowsAreSolidColor(surface, 11, 3, BGRAColor::Green(),
-                                      /* aFuzz = */ 3));
-        EXPECT_TRUE(RowsAreSolidColor(surface, 16, 4, BGRAColor::Red(),
-                                      /* aFuzz = */ 3));
-      });
+          // Check that the generated image is correct. Note that we skip rows
+          // near the transitions between colors, since the downscaler does not
+          // produce a sharp boundary at these points. Even some of the rows we
+          // test need a small amount of fuzz; this is just the nature of Lanczos
+          // downscaling.
+          RawAccessFrameRef currentFrame = aDecoder->GetCurrentFrameRef();
+          RefPtr<SourceSurface> surface = currentFrame->GetSourceSurface();
+          EXPECT_TRUE(RowsAreSolidColor(surface, 0, 4, BGRAColor::Green(),
+                                        /* aFuzz = */ 2));
+          EXPECT_TRUE(RowsAreSolidColor(surface, 6, 3, BGRAColor::Red(),
+                                        /* aFuzz = */ 3));
+          EXPECT_TRUE(RowsAreSolidColor(surface, 11, 3, BGRAColor::Green(),
+                                        /* aFuzz = */ 3));
+          EXPECT_TRUE(RowsAreSolidColor(surface, 16, 4, BGRAColor::Red(),
+                                        /* aFuzz = */ 3));
+        });
+  });
 }

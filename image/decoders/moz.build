@@ -46,6 +46,8 @@ LOCAL_INCLUDES += [
     "/image",
     # for libyuv::ARGBAttenuate and ::ARGBUnattenuate
     "/media/libyuv/libyuv/include",
+    # For OilDownscaler.h (via DownscalingFilter.h)
+    "/third_party/liboil",
 ]
 
 LOCAL_INCLUDES += CONFIG["SKIA_INCLUDES"]
