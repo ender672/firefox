@@ -24,11 +24,11 @@
  */
 
 #include "StreamingScaler.h"
-#include "StreamingScalerInternal.h"
 
 #include <cmath>
 #include <cstring>
 
+#include "StreamingScalerInternal.h"
 #include "mozilla/fallible.h"
 
 #ifdef USE_SSE2
@@ -39,8 +39,7 @@
 #  include "mozilla/arm.h"
 #endif
 
-namespace mozilla {
-namespace gfx {
+namespace mozilla::gfx {
 
 // clang-format off
 const float gI2fMap[256] = {
@@ -78,8 +77,6 @@ const float gI2fMap[256] = {
     248.0f / 255, 249.0f / 255, 250.0f / 255, 251.0f / 255, 252.0f / 255, 253.0f / 255, 254.0f / 255, 255.0f / 255,
 };
 // clang-format on
-
-namespace {
 
 /**
  * When shrinking a 10 million pixel wide scanline down to a single pixel, we
@@ -465,8 +462,6 @@ static void DownScaleIn(StreamingScaler::State* aOs, const unsigned char* aIn) {
   aOs->mInPos++;
 }
 
-}  // namespace
-
 StreamingScaler::StreamingScaler() : mScaler{}, mBufferSize(0), mInitialized(false) {}
 
 StreamingScaler::~StreamingScaler() { Free(); }
@@ -611,5 +606,4 @@ void StreamingScaler::Reset() {
   }
 }
 
-}  // namespace gfx
-}  // namespace mozilla
+}  // namespace mozilla::gfx

@@ -24,12 +24,13 @@
  */
 
 #include "StreamingScaler.h"
-#include "StreamingScalerInternal.h"
+
 #include <cstring>
 #include <immintrin.h>
 
-namespace mozilla {
-namespace gfx {
+#include "StreamingScalerInternal.h"
+
+namespace mozilla::gfx {
 
 static void YScaleOutBgrxAvx2(float* aSums, int aWidth, unsigned char* aOut,
                               int aTap) {
@@ -554,5 +555,4 @@ int StreamingScaler::OutAvx2(State* aOs, unsigned char* aOut) {
   return 0;
 }
 
-}  // namespace gfx
-}  // namespace mozilla
+}  // namespace mozilla::gfx

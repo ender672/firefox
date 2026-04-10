@@ -24,12 +24,13 @@
  */
 
 #include "StreamingScaler.h"
-#include "StreamingScalerInternal.h"
+
 #include <arm_neon.h>
 #include <cstring>
 
-namespace mozilla {
-namespace gfx {
+#include "StreamingScalerInternal.h"
+
+namespace mozilla::gfx {
 
 static void YScaleOutBgraNeon(float* aSums, int aWidth, unsigned char* aOut,
                               int aTap) {
@@ -531,5 +532,4 @@ int StreamingScaler::OutNeon(State* aOs, unsigned char* aOut) {
   return 0;
 }
 
-}  // namespace gfx
-}  // namespace mozilla
+}  // namespace mozilla::gfx

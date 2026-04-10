@@ -2,14 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#ifndef mozilla_gfx_StreamingScaler_h
-#define mozilla_gfx_StreamingScaler_h
+#ifndef GFX_2D_STREAMINGSCALER_H_
+#define GFX_2D_STREAMINGSCALER_H_
 
 #include "mozilla/gfx/2D.h"
 #include "mozilla/UniquePtr.h"
 
-namespace mozilla {
-namespace gfx {
+namespace mozilla::gfx {
 
 /**
  * StreamingScaler is a streaming image downscaler.
@@ -84,7 +83,6 @@ class StreamingScaler {
   bool mInitialized;
 };
 
-}  // namespace gfx
-}  // namespace mozilla
+}  // namespace mozilla::gfx
 
-#endif  // mozilla_gfx_StreamingScaler_h
+#endif  // GFX_2D_STREAMINGSCALER_H_

@@ -2,16 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#ifndef mozilla_gfx_StreamingScalerInternal_h
-#define mozilla_gfx_StreamingScalerInternal_h
+#ifndef GFX_2D_STREAMINGSCALERINTERNAL_H_
+#define GFX_2D_STREAMINGSCALERINTERNAL_H_
 
-namespace mozilla {
-namespace gfx {
+namespace mozilla::gfx {
 
 /* Lookup table mapping byte values [0,255] to float values [0.0, 1.0]. */
 extern const float gI2fMap[256];
 
-}  // namespace gfx
-}  // namespace mozilla
+}  // namespace mozilla::gfx
 
-#endif
+#endif  // GFX_2D_STREAMINGSCALERINTERNAL_H_
