@@ -47,8 +47,9 @@ class StreamingScaler {
   StreamingScaler(const StreamingScaler&) = delete;
   StreamingScaler& operator=(const StreamingScaler&) = delete;
 
-  bool Init(int32_t aInputWidth, int32_t aInputHeight, int32_t aOutputWidth,
-            int32_t aOutputHeight, SurfaceFormat aFormat);
+  [[nodiscard]] bool Init(int32_t aInputWidth, int32_t aInputHeight,
+                          int32_t aOutputWidth, int32_t aOutputHeight,
+                          SurfaceFormat aFormat);
 
   // Reset for a new progressive pass over the same frame dimensions.
   void Reset();

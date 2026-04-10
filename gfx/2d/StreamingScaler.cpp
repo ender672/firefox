@@ -462,7 +462,8 @@ static void DownScaleIn(StreamingScaler::State* aOs, const unsigned char* aIn) {
   aOs->mInPos++;
 }
 
-StreamingScaler::StreamingScaler() : mScaler{}, mBufferSize(0), mInitialized(false) {}
+StreamingScaler::StreamingScaler()
+    : mScaler{}, mBufferSize(0), mInitialized(false) {}
 
 StreamingScaler::~StreamingScaler() { Free(); }
 

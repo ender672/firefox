@@ -130,7 +130,7 @@ FINAL_LIBRARY = "xul"
 # SIMD dispatch for OilDownscaler
 if CONFIG["INTEL_ARCHITECTURE"]:
     DEFINES["USE_SSE2"] = True
-if CONFIG["TARGET_CPU"] == "aarch64":
+if CONFIG["TARGET_CPU"] == "aarch64" or CONFIG["BUILD_ARM_NEON"]:
     DEFINES["USE_NEON"] = True
 
 LOCAL_INCLUDES += [
