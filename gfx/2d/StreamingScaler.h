@@ -8,8 +8,7 @@
 #include "mozilla/gfx/2D.h"
 #include "mozilla/UniquePtr.h"
 
-namespace mozilla {
-namespace gfx {
+namespace mozilla::gfx {
 
 /**
  * StreamingScaler is a streaming image downscaler.
@@ -75,7 +74,6 @@ class StreamingScaler final {
   int mBufferSize = 0;
 };
 
-}  // namespace gfx
-}  // namespace mozilla
+}  // namespace mozilla::gfx
 
 #endif  // MOZILLA_GFX_STREAMINGSCALER_H_
