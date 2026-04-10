@@ -7,23 +7,41 @@
 
 #include "mozilla/gfx/2D.h"
 #include "mozilla/UniquePtr.h"
-#include "OilResample.h"
 
 namespace mozilla {
 namespace gfx {
 
 /**
- * StreamingScaler is a thin wrapper around liboil's streaming scaler.
- *
- * It maps the row-by-row streaming pattern to liboil's oil_scale_in() and
- * oil_scale_out() API.
- *
- * It manages the scaler's backing buffer using Firefox's allocator so that
- * allocations are tracked via jemalloc and the buffer can be reused across
- * progressive passes without re-allocating.
+ * StreamingScaler is a streaming image downscaler.
  */
 class StreamingScaler {
  public:
+  enum class Colorspace {
+    Bgra = 0x0604,
+    Bgrx = 0x0704,
+  };
+
+  /**
+   * Struct to hold state for scaling.
+   */
+  struct State {
+    int mInHeight;
+    int mOutHeight;
+    int mInWidth;
+    int mOutWidth;
+    Colorspace mCs;
+    int mInPos;
+    int mOutPos;
+    float* mCoeffsY;
+    float* mCoeffsX;
+    int* mBordersX;
+    int* mBordersY;
+    float* mSumsY;
+    float* mTmpCoeffs;
+    void* mBuf;
+    int mSumsYTap;
+  };
+
   StreamingScaler();
   ~StreamingScaler();
 
@@ -47,8 +65,20 @@ class StreamingScaler {
   // True when all output rows have been produced.
   bool OutputComplete() const;
 
+#ifdef USE_SSE2
+  static int InSse2(State* aOs, const unsigned char* aIn);
+  static int OutSse2(State* aOs, unsigned char* aOut);
+  static int InAvx2(State* aOs, const unsigned char* aIn);
+  static int OutAvx2(State* aOs, unsigned char* aOut);
+#endif
+
+#ifdef USE_NEON
+  static int InNeon(State* aOs, const unsigned char* aIn);
+  static int OutNeon(State* aOs, unsigned char* aOut);
+#endif
+
  private:
-  OilScale mScaler;
+  State mScaler;
   UniquePtr<uint8_t[]> mBuffer;
   int mBufferSize;
   bool mInitialized;

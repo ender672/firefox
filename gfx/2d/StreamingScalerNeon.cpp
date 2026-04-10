@@ -1,4 +1,8 @@
-/**
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/*
  * Copyright (c) 2014-2019 Timothy Elliott
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -19,16 +23,16 @@
  * THE SOFTWARE.
  */
 
-#include "OilResample.h"
-
-#include "OilResampleInternal.h"
+#include "StreamingScaler.h"
+#include "StreamingScalerInternal.h"
 #include <arm_neon.h>
 #include <cstring>
 
 namespace mozilla {
+namespace gfx {
 
-static void OilYScaleOutBgraNeon(float* aSums, int aWidth, unsigned char* aOut,
-                                 int aTap) {
+static void YScaleOutBgraNeon(float* aSums, int aWidth, unsigned char* aOut,
+                              int aTap) {
   int i, tapOff;
   float32x4_t scaleV, one, zero, half;
   float32x4_t vals, alphaV;
@@ -78,7 +82,7 @@ static void OilYScaleOutBgraNeon(float* aSums, int aWidth, unsigned char* aOut,
   }
 }
 
-static void OilScaleDownBgraNeon(unsigned char* aIn, float* aSumsYOut,
+static void ScaleDownBgraNeon(const unsigned char* aIn, float* aSumsYOut,
                                  int aOutWidth, float* aCoeffsXF,
                                  int* aBorderBuf, float* aCoeffsYF, int aTap) {
   int i, j;
@@ -234,8 +238,8 @@ static void OilScaleDownBgraNeon(unsigned char* aIn, float* aSumsYOut,
   }
 }
 
-static void OilYScaleOutBgrxNeon(float* aSums, int aWidth, unsigned char* aOut,
-                                 int aTap) {
+static void YScaleOutBgrxNeon(float* aSums, int aWidth, unsigned char* aOut,
+                              int aTap) {
   int i, tapOff;
   float32x4_t scaleV, one, zero, half;
   float32x4_t z;
@@ -323,7 +327,7 @@ static void OilYScaleOutBgrxNeon(float* aSums, int aWidth, unsigned char* aOut,
   }
 }
 
-static void OilScaleDownBgrxNeon(unsigned char* aIn, float* aSumsYOut,
+static void ScaleDownBgrxNeon(const unsigned char* aIn, float* aSumsYOut,
                                  int aOutWidth, float* aCoeffsXF,
                                  int* aBorderBuf, float* aCoeffsYF, int aTap) {
   int i, j;
@@ -475,29 +479,30 @@ static void OilScaleDownBgrxNeon(unsigned char* aIn, float* aSumsYOut,
 /* NEON dispatch functions */
 
 static void YScaleOutNeon(float* aSums, int aWidth, unsigned char* aOut,
-                          OilColorspace aCs, int aTap) {
+                          StreamingScaler::Colorspace aCs, int aTap) {
   switch (aCs) {
-    case OilColorspace::Bgra:
-      OilYScaleOutBgraNeon(aSums, aWidth, aOut, aTap);
+    case StreamingScaler::Colorspace::Bgra:
+      YScaleOutBgraNeon(aSums, aWidth, aOut, aTap);
       break;
-    case OilColorspace::Bgrx:
-      OilYScaleOutBgrxNeon(aSums, aWidth, aOut, aTap);
+    case StreamingScaler::Colorspace::Bgrx:
+      YScaleOutBgrxNeon(aSums, aWidth, aOut, aTap);
       break;
   }
 }
 
-static void DownScaleInNeon(OilScale* aOs, unsigned char* aIn) {
+static void DownScaleInNeon(StreamingScaler::State* aOs,
+                           const unsigned char* aIn) {
   float* coeffsY;
 
   coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
 
   switch (aOs->mCs) {
-    case OilColorspace::Bgra:
-      OilScaleDownBgraNeon(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
+    case StreamingScaler::Colorspace::Bgra:
+      ScaleDownBgraNeon(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
                            aOs->mBordersX, coeffsY, aOs->mSumsYTap);
       break;
-    case OilColorspace::Bgrx:
-      OilScaleDownBgrxNeon(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
+    case StreamingScaler::Colorspace::Bgrx:
+      ScaleDownBgrxNeon(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
                            aOs->mBordersX, coeffsY, aOs->mSumsYTap);
       break;
   }
@@ -506,16 +511,16 @@ static void DownScaleInNeon(OilScale* aOs, unsigned char* aIn) {
   aOs->mInPos++;
 }
 
-int OilScaleInNeon(OilScale* aOs, unsigned char* aIn) {
-  if (OilScaleSlots(aOs) == 0) {
+int StreamingScaler::InNeon(State* aOs, const unsigned char* aIn) {
+  if (aOs->mBordersY[aOs->mOutPos] == 0) {
     return -1;
   }
   DownScaleInNeon(aOs, aIn);
   return 0;
 }
 
-int OilScaleOutNeon(OilScale* aOs, unsigned char* aOut) {
-  if (OilScaleSlots(aOs) != 0) {
+int StreamingScaler::OutNeon(State* aOs, unsigned char* aOut) {
+  if (aOs->mBordersY[aOs->mOutPos] != 0) {
     return -1;
   }
 
@@ -526,4 +531,5 @@ int OilScaleOutNeon(OilScale* aOs, unsigned char* aOut) {
   return 0;
 }
 
+}  // namespace gfx
 }  // namespace mozilla
