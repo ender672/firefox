@@ -86,8 +86,8 @@ static void YScaleOutBgraNeon(float* aSums, int aWidth, uint8_t* aOut,
 }
 
 static void ScaleDownBgraNeon(const uint8_t* aIn, float* aSumsYOut,
-                                 int aOutWidth, float* aCoeffsXF,
-                                 int* aBorderBuf, float* aCoeffsYF, int aTap) {
+                              int aOutWidth, float* aCoeffsXF, int* aBorderBuf,
+                              float* aCoeffsYF, int aTap) {
   int i, j;
   int off0, off1, off2, off3;
   float32x4_t coeffsX, coeffsX2, coeffsXA, coeffsX2A, sampleX;
@@ -331,8 +331,8 @@ static void YScaleOutBgrxNeon(float* aSums, int aWidth, uint8_t* aOut,
 }
 
 static void ScaleDownBgrxNeon(const uint8_t* aIn, float* aSumsYOut,
-                                 int aOutWidth, float* aCoeffsXF,
-                                 int* aBorderBuf, float* aCoeffsYF, int aTap) {
+                              int aOutWidth, float* aCoeffsXF, int* aBorderBuf,
+                              float* aCoeffsYF, int aTap) {
   int i, j;
   int off0, off1, off2, off3;
   float32x4_t coeffsX, coeffsX2, sampleX, sumR, sumG, sumB, sumX;
@@ -482,32 +482,25 @@ static void ScaleDownBgrxNeon(const uint8_t* aIn, float* aSumsYOut,
 /* NEON dispatch functions */
 
 static void YScaleOutNeon(float* aSums, int aWidth, uint8_t* aOut,
-                          StreamingScaler::Colorspace aCs, int aTap) {
-  switch (aCs) {
-    case StreamingScaler::Colorspace::Bgra:
-      YScaleOutBgraNeon(aSums, aWidth, aOut, aTap);
-      break;
-    case StreamingScaler::Colorspace::Bgrx:
-      YScaleOutBgrxNeon(aSums, aWidth, aOut, aTap);
-      break;
+                          bool aHasAlpha, int aTap) {
+  if (aHasAlpha) {
+    YScaleOutBgraNeon(aSums, aWidth, aOut, aTap);
+  } else {
+    YScaleOutBgrxNeon(aSums, aWidth, aOut, aTap);
   }
 }
 
-static void DownScaleInNeon(StreamingScaler::State* aOs,
-                           const uint8_t* aIn) {
+static void DownScaleInNeon(StreamingScaler::State* aOs, const uint8_t* aIn) {
   float* coeffsY;
 
   coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
 
-  switch (aOs->mCs) {
-    case StreamingScaler::Colorspace::Bgra:
-      ScaleDownBgraNeon(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
-                           aOs->mBordersX, coeffsY, aOs->mSumsYTap);
-      break;
-    case StreamingScaler::Colorspace::Bgrx:
-      ScaleDownBgrxNeon(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
-                           aOs->mBordersX, coeffsY, aOs->mSumsYTap);
-      break;
+  if (aOs->mHasAlpha) {
+    ScaleDownBgraNeon(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
+                      aOs->mBordersX, coeffsY, aOs->mSumsYTap);
+  } else {
+    ScaleDownBgrxNeon(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
+                      aOs->mBordersX, coeffsY, aOs->mSumsYTap);
   }
 
   aOs->mBordersY[aOs->mOutPos] -= 1;
@@ -521,7 +514,8 @@ void StreamingScaler::InNeon(State* aOs, const uint8_t* aIn) {
 
 void StreamingScaler::OutNeon(State* aOs, uint8_t* aOut) {
   MOZ_ASSERT(aOs->mBordersY[aOs->mOutPos] == 0);
-  YScaleOutNeon(aOs->mSumsY, aOs->mOutWidth, aOut, aOs->mCs, aOs->mSumsYTap);
+  YScaleOutNeon(aOs->mSumsY, aOs->mOutWidth, aOut, aOs->mHasAlpha,
+                aOs->mSumsYTap);
   aOs->mSumsYTap = (aOs->mSumsYTap + 1) & 3;
   aOs->mOutPos++;
 }

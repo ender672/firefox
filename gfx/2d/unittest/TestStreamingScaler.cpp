@@ -16,7 +16,7 @@ TestStreamingScaler::TestStreamingScaler() {
 
 void TestStreamingScaler::BasicScale() {
   StreamingScaler scaler;
-  VERIFY(scaler.Init(2, 2, 1, 1, SurfaceFormat::B8G8R8A8));
+  VERIFY(scaler.Init(IntSize(2, 2), IntSize(1, 1), SurfaceFormat::B8G8R8A8));
 
   uint32_t input[4] = {0xff00ff00, 0xff00ff00, 0xff00ff00, 0xff00ff00};
   uint32_t output[1] = {0};
@@ -37,7 +37,7 @@ void TestStreamingScaler::BasicScale() {
 
 void TestStreamingScaler::ProgressiveScale() {
   StreamingScaler scaler;
-  VERIFY(scaler.Init(2, 2, 1, 1, SurfaceFormat::B8G8R8A8));
+  VERIFY(scaler.Init(IntSize(2, 2), IntSize(1, 1), SurfaceFormat::B8G8R8A8));
 
   uint32_t input[4] = {0xff00ff00, 0xff00ff00, 0xff00ff00, 0xff00ff00};
   uint32_t output[1] = {0};
@@ -60,13 +60,14 @@ void TestStreamingScaler::ProgressiveScale() {
 void TestStreamingScaler::FormatSupport() {
   StreamingScaler scaler;
   // Supported formats
-  VERIFY(scaler.Init(10, 10, 5, 5, SurfaceFormat::B8G8R8A8));
-  VERIFY(scaler.Init(10, 10, 5, 5, SurfaceFormat::B8G8R8X8));
-  VERIFY(scaler.Init(10, 10, 5, 5, SurfaceFormat::R8G8B8A8));
-  VERIFY(scaler.Init(10, 10, 5, 5, SurfaceFormat::R8G8B8X8));
+  VERIFY(scaler.Init(IntSize(10, 10), IntSize(5, 5), SurfaceFormat::B8G8R8A8));
+  VERIFY(scaler.Init(IntSize(10, 10), IntSize(5, 5), SurfaceFormat::B8G8R8X8));
+  VERIFY(scaler.Init(IntSize(10, 10), IntSize(5, 5), SurfaceFormat::R8G8B8A8));
+  VERIFY(scaler.Init(IntSize(10, 10), IntSize(5, 5), SurfaceFormat::R8G8B8X8));
 
   // Unsupported formats (currently only 4-component formats are supported by
   // the wrapper, matching what was in image/DownscalingFilter.h)
-  VERIFY(!scaler.Init(10, 10, 5, 5, SurfaceFormat::A8));
-  VERIFY(!scaler.Init(10, 10, 5, 5, SurfaceFormat::R5G6B5_UINT16));
+  VERIFY(!scaler.Init(IntSize(10, 10), IntSize(5, 5), SurfaceFormat::A8));
+  VERIFY(!scaler.Init(IntSize(10, 10), IntSize(5, 5),
+                      SurfaceFormat::R5G6B5_UINT16));
 }

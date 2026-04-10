@@ -188,8 +188,7 @@ static void ShiftLeftF(float* aF) {
   aF[3] = 0.0f;
 }
 
-static void YScaleOutBgra(float* aSums, int aWidth, uint8_t* aOut,
-                          int aTap) {
+static void YScaleOutBgra(float* aSums, int aWidth, uint8_t* aOut, int aTap) {
   int i, j, tapOff;
   float alpha, val;
 
@@ -211,8 +210,7 @@ static void YScaleOutBgra(float* aSums, int aWidth, uint8_t* aOut,
   }
 }
 
-static void YScaleOutBgrx(float* aSums, int aWidth, uint8_t* aOut,
-                          int aTap) {
+static void YScaleOutBgrx(float* aSums, int aWidth, uint8_t* aOut, int aTap) {
   int i, j, tapOff;
 
   tapOff = aTap * 4;
@@ -228,15 +226,12 @@ static void YScaleOutBgrx(float* aSums, int aWidth, uint8_t* aOut,
   }
 }
 
-static void YScaleOut(float* aSums, int aWidth, uint8_t* aOut,
-                      StreamingScaler::Colorspace aCs, int aTap) {
-  switch (aCs) {
-    case StreamingScaler::Colorspace::Bgra:
-      YScaleOutBgra(aSums, aWidth, aOut, aTap);
-      break;
-    case StreamingScaler::Colorspace::Bgrx:
-      YScaleOutBgrx(aSums, aWidth, aOut, aTap);
-      break;
+static void YScaleOut(float* aSums, int aWidth, uint8_t* aOut, bool aHasAlpha,
+                      int aTap) {
+  if (aHasAlpha) {
+    YScaleOutBgra(aSums, aWidth, aOut, aTap);
+  } else {
+    YScaleOutBgrx(aSums, aWidth, aOut, aTap);
   }
 }
 
@@ -298,9 +293,9 @@ static void ScaleDownCoeffs(int aInDim, int aOutDim, float* aCoeffBuf,
   }
 }
 
-static void ScaleDownBgra(const uint8_t* aIn, float* aSumsY,
-                          int aOutWidth, float* aCoeffsX, int* aBorderBuf,
-                          float* aCoeffsY, int aTap) {
+static void ScaleDownBgra(const uint8_t* aIn, float* aSumsY, int aOutWidth,
+                          float* aCoeffsX, int* aBorderBuf, float* aCoeffsY,
+                          int aTap) {
   int i, j, k;
   float alpha, sum[4][4] = {{0.0f}};
 
@@ -334,9 +329,9 @@ static void ScaleDownBgra(const uint8_t* aIn, float* aSumsY,
   }
 }
 
-static void ScaleDownBgrx(const uint8_t* aIn, float* aSumsY,
-                          int aOutWidth, float* aCoeffsX, int* aBorderBuf,
-                          float* aCoeffsY, int aTap) {
+static void ScaleDownBgrx(const uint8_t* aIn, float* aSumsY, int aOutWidth,
+                          float* aCoeffsX, int* aBorderBuf, float* aCoeffsY,
+                          int aTap) {
   int i, j, k;
   float sum[4][4] = {{0.0f}};
 
@@ -428,15 +423,12 @@ static void DownScaleIn(StreamingScaler::State* aOs, const uint8_t* aIn) {
 
   coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
 
-  switch (aOs->mCs) {
-    case StreamingScaler::Colorspace::Bgra:
-      ScaleDownBgra(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
-                    aOs->mBordersX, coeffsY, aOs->mSumsYTap);
-      break;
-    case StreamingScaler::Colorspace::Bgrx:
-      ScaleDownBgrx(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
-                    aOs->mBordersX, coeffsY, aOs->mSumsYTap);
-      break;
+  if (aOs->mHasAlpha) {
+    ScaleDownBgra(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
+                  aOs->mBordersX, coeffsY, aOs->mSumsYTap);
+  } else {
+    ScaleDownBgrx(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
+                  aOs->mBordersX, coeffsY, aOs->mSumsYTap);
   }
 
   aOs->mBordersY[aOs->mOutPos] -= 1;
@@ -463,40 +455,35 @@ void StreamingScaler::Free() {
   mBufferSize = 0;
 }
 
-bool StreamingScaler::Init(int32_t aInputWidth, int32_t aInputHeight,
-                           int32_t aOutputWidth, int32_t aOutputHeight,
-                           SurfaceFormat aFormat) {
+bool StreamingScaler::Init(const IntSize& aInputSize,
+                           const IntSize& aOutputSize, SurfaceFormat aFormat) {
   Free();
 
-  Colorspace cs;
   switch (aFormat) {
     case SurfaceFormat::B8G8R8A8:
     case SurfaceFormat::B8G8R8X8:
     case SurfaceFormat::R8G8B8A8:
     case SurfaceFormat::R8G8B8X8:
-      // These are all 4-component; resampling is channel-independent
-      // so byte order doesn't matter. Use RGBX for opaque to skip alpha
-      // premultiply.
-      cs = IsOpaque(aFormat) ? Colorspace::Bgrx : Colorspace::Bgra;
       break;
     default:
       return false;
   }
 
-  /* sanity check on arguments */
-  if (aInputHeight > kMaxDimension || aOutputHeight > kMaxDimension ||
-      aInputHeight < 1 || aOutputHeight < 1 || aInputWidth > kMaxDimension ||
-      aOutputWidth > kMaxDimension || aInputWidth < 1 || aOutputWidth < 1) {
+  int32_t inW = aInputSize.width;
+  int32_t inH = aInputSize.height;
+  int32_t outW = aOutputSize.width;
+  int32_t outH = aOutputSize.height;
+
+  if (inH > kMaxDimension || outH > kMaxDimension || inH < 1 || outH < 1 ||
+      inW > kMaxDimension || outW > kMaxDimension || inW < 1 || outW < 1) {
     return false;
   }
 
-  /* only downscaling is supported */
-  if (aOutputHeight > aInputHeight || aOutputWidth > aInputWidth) {
+  if (outH > inH || outW > inW) {
     return false;
   }
 
-  int allocSize = DownscaleAllocSize(aInputHeight, aOutputHeight, aInputWidth,
-                                     aOutputWidth);
+  int allocSize = DownscaleAllocSize(inH, outH, inW, outW);
   if (allocSize <= 0) {
     return false;
   }
@@ -509,11 +496,11 @@ bool StreamingScaler::Init(int32_t aInputWidth, int32_t aInputHeight,
   mBufferSize = allocSize;
 
   memset(&mScaler, 0, sizeof(State));
-  mScaler.mInHeight = aInputHeight;
-  mScaler.mOutHeight = aOutputHeight;
-  mScaler.mInWidth = aInputWidth;
-  mScaler.mOutWidth = aOutputWidth;
-  mScaler.mCs = cs;
+  mScaler.mInHeight = inH;
+  mScaler.mOutHeight = outH;
+  mScaler.mInWidth = inW;
+  mScaler.mOutWidth = outW;
+  mScaler.mHasAlpha = !IsOpaque(aFormat);
   mScaler.mBuf = mBuffer.get();
 
   DownscaleInit(&mScaler);
@@ -568,7 +555,7 @@ void StreamingScaler::ProduceRow(uint8_t* aOutputRow) {
     return;
   }
 #endif
-  YScaleOut(mScaler.mSumsY, mScaler.mOutWidth, aOutputRow, mScaler.mCs,
+  YScaleOut(mScaler.mSumsY, mScaler.mOutWidth, aOutputRow, mScaler.mHasAlpha,
             mScaler.mSumsYTap);
   mScaler.mSumsYTap = (mScaler.mSumsYTap + 1) & 3;
   mScaler.mOutPos++;

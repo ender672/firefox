@@ -107,8 +107,8 @@ static void YScaleOutBgrxAvx2(float* aSums, int aWidth, uint8_t* aOut,
 }
 
 static void ScaleDownBgrxAvx2(const uint8_t* aIn, float* aSumsYOut,
-                                 int aOutWidth, float* aCoeffsXF,
-                                 int* aBorderBuf, float* aCoeffsYF, int aTap) {
+                              int aOutWidth, float* aCoeffsXF, int* aBorderBuf,
+                              float* aCoeffsYF, int aTap) {
   int i, j;
   __m128 coeffsX, coeffsX2, sampleX, sumR, sumG, sumB;
   __m128 sumR2, sumG2, sumB2;
@@ -355,8 +355,8 @@ static void YScaleOutBgraAvx2(float* aSums, int aWidth, uint8_t* aOut,
 }
 
 static void ScaleDownBgraAvx2(const uint8_t* aIn, float* aSumsYOut,
-                                 int aOutWidth, float* aCoeffsXF,
-                                 int* aBorderBuf, float* aCoeffsYF, int aTap) {
+                              int aOutWidth, float* aCoeffsXF, int* aBorderBuf,
+                              float* aCoeffsYF, int aTap) {
   int i, j;
   __m128 coeffsX, coeffsX2, coeffsXA, coeffsX2A, sampleX;
   __m128 sumR, sumG, sumB, sumA;
@@ -505,32 +505,25 @@ static void ScaleDownBgraAvx2(const uint8_t* aIn, float* aSumsYOut,
 /* AVX2 dispatch functions */
 
 static void YScaleOutAvx2(float* aSums, int aWidth, uint8_t* aOut,
-                          StreamingScaler::Colorspace aCs, int aTap) {
-  switch (aCs) {
-    case StreamingScaler::Colorspace::Bgra:
-      YScaleOutBgraAvx2(aSums, aWidth, aOut, aTap);
-      break;
-    case StreamingScaler::Colorspace::Bgrx:
-      YScaleOutBgrxAvx2(aSums, aWidth, aOut, aTap);
-      break;
+                          bool aHasAlpha, int aTap) {
+  if (aHasAlpha) {
+    YScaleOutBgraAvx2(aSums, aWidth, aOut, aTap);
+  } else {
+    YScaleOutBgrxAvx2(aSums, aWidth, aOut, aTap);
   }
 }
 
-static void DownScaleInAvx2(StreamingScaler::State* aOs,
-                            const uint8_t* aIn) {
+static void DownScaleInAvx2(StreamingScaler::State* aOs, const uint8_t* aIn) {
   float* coeffsY;
 
   coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
 
-  switch (aOs->mCs) {
-    case StreamingScaler::Colorspace::Bgra:
-      ScaleDownBgraAvx2(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
-                           aOs->mBordersX, coeffsY, aOs->mSumsYTap);
-      break;
-    case StreamingScaler::Colorspace::Bgrx:
-      ScaleDownBgrxAvx2(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
-                           aOs->mBordersX, coeffsY, aOs->mSumsYTap);
-      break;
+  if (aOs->mHasAlpha) {
+    ScaleDownBgraAvx2(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
+                      aOs->mBordersX, coeffsY, aOs->mSumsYTap);
+  } else {
+    ScaleDownBgrxAvx2(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
+                      aOs->mBordersX, coeffsY, aOs->mSumsYTap);
   }
 
   aOs->mBordersY[aOs->mOutPos] -= 1;
@@ -544,7 +537,8 @@ void StreamingScaler::InAvx2(State* aOs, const uint8_t* aIn) {
 
 void StreamingScaler::OutAvx2(State* aOs, uint8_t* aOut) {
   MOZ_ASSERT(aOs->mBordersY[aOs->mOutPos] == 0);
-  YScaleOutAvx2(aOs->mSumsY, aOs->mOutWidth, aOut, aOs->mCs, aOs->mSumsYTap);
+  YScaleOutAvx2(aOs->mSumsY, aOs->mOutWidth, aOut, aOs->mHasAlpha,
+                aOs->mSumsYTap);
   aOs->mSumsYTap = (aOs->mSumsYTap + 1) & 3;
   aOs->mOutPos++;
 }

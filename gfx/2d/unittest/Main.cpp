@@ -17,12 +17,11 @@ struct TestObject {
 };
 
 int main() {
-  TestObject tests[] = {
-      {new SanityChecks(), "Sanity Checks"},
-      {new TestPoint(), "Point Tests"},
-      {new TestScaling(), "Scaling Tests"},
-      {new TestStreamingScaler(), "Streaming Scaler Tests"},
-      {new TestBugs(), "Bug Tests"}};
+  TestObject tests[] = {{new SanityChecks(), "Sanity Checks"},
+                        {new TestPoint(), "Point Tests"},
+                        {new TestScaling(), "Scaling Tests"},
+                        {new TestStreamingScaler(), "Streaming Scaler Tests"},
+                        {new TestBugs(), "Bug Tests"}};
 
   int totalFailures = 0;
   int totalTests = 0;

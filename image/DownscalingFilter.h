@@ -102,9 +102,7 @@ class DownscalingFilter final : public SurfaceFilter {
     mUseOil = StaticPrefs::image_downscaler_use_oil();
 
     if (mUseOil) {
-      if (!mOilDownscaler.Init(mInputSize.width, mInputSize.height,
-                               outputSize.width, outputSize.height,
-                               aConfig.mFormat)) {
+      if (!mOilDownscaler.Init(mInputSize, outputSize, aConfig.mFormat)) {
         NS_WARNING("Failed to initialize liboil downscaler, falling back");
         mUseOil = false;
       }

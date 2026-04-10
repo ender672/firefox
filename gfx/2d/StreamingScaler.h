@@ -8,27 +8,42 @@
 #include "mozilla/gfx/2D.h"
 #include "mozilla/UniquePtr.h"
 
-namespace mozilla::gfx {
+namespace mozilla {
+namespace gfx {
 
 /**
  * StreamingScaler is a streaming image downscaler.
  */
-class StreamingScaler {
+class StreamingScaler final {
  public:
-  enum class Colorspace {
-    Bgra = 0x0604,
-    Bgrx = 0x0704,
-  };
+  StreamingScaler();
+  ~StreamingScaler();
 
-  /**
-   * Struct to hold state for scaling.
-   */
+  StreamingScaler(const StreamingScaler&) = delete;
+  StreamingScaler& operator=(const StreamingScaler&) = delete;
+
+  [[nodiscard]] bool Init(const IntSize& aInputSize, const IntSize& aOutputSize,
+                          SurfaceFormat aFormat);
+
+  // Reset for a new progressive pass over the same frame dimensions.
+  void Reset();
+
+  // Number of input rows the scaler can accept before producing output.
+  int Slots() const;
+  // Feed one input row to the scaler.
+  void FeedRow(const uint8_t* aInputRow);
+  // Produce one output row.
+  void ProduceRow(uint8_t* aOutputRow);
+  // True when all output rows have been produced.
+  bool OutputComplete() const;
+
+ private:
   struct State {
     int mInHeight;
     int mOutHeight;
     int mInWidth;
     int mOutWidth;
-    Colorspace mCs;
+    bool mHasAlpha;
     int mInPos;
     int mOutPos;
     float* mCoeffsY;
@@ -41,31 +56,8 @@ class StreamingScaler {
     int mSumsYTap;
   };
 
-  StreamingScaler();
-  ~StreamingScaler();
-
-  StreamingScaler(const StreamingScaler&) = delete;
-  StreamingScaler& operator=(const StreamingScaler&) = delete;
-
-  [[nodiscard]] bool Init(int32_t aInputWidth, int32_t aInputHeight,
-                          int32_t aOutputWidth, int32_t aOutputHeight,
-                          SurfaceFormat aFormat);
-
-  // Reset for a new progressive pass over the same frame dimensions.
-  void Reset();
-
   void Free();
 
-  // Number of input rows the scaler can accept before producing output.
-  int Slots() const;
-  // Feed one input row to the scaler.
-  void FeedRow(const uint8_t* aInputRow);
-  // Produce one output row.
-  void ProduceRow(uint8_t* aOutputRow);
-  // True when all output rows have been produced.
-  bool OutputComplete() const;
-
- private:
 #ifdef USE_SSE2
   static void InSse2(State* aOs, const uint8_t* aIn);
   static void OutSse2(State* aOs, uint8_t* aOut);
@@ -84,6 +76,7 @@ class StreamingScaler {
   bool mInitialized;
 };
 
-}  // namespace mozilla::gfx
+}  // namespace gfx
+}  // namespace mozilla
 
 #endif  // MOZILLA_GFX_STREAMINGSCALER_H_
