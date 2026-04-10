@@ -27,10 +27,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 #include "StreamingScalerInternal.h"
-#include "mozilla/fallible.h"
 
 #ifdef USE_SSE2
 #  include "mozilla/SSE.h"
@@ -345,49 +343,13 @@ static void ScaleDownBgrx(const uint8_t* aIn, float* aSumsY, int aOutWidth,
   }
 }
 
-static constexpr int Align16(int aX) { return (aX + 15) & ~15; }
-
-static int CalcCoeffsLen(int aInDim, int aOutDim) {
-  return kTaps * std::max(aInDim, aOutDim) * sizeof(float);
-}
-
-static int CalcBordersLen(int aInDim, int aOutDim) {
-  return std::min(aInDim, aOutDim) * sizeof(int);
-}
-
-static int DownscaleAllocSize(int aInHeight, int aOutHeight, int aInWidth,
-                              int aOutWidth) {
-  int tapsX = CalcTaps(aInWidth, aOutWidth);
-  int tapsY = CalcTaps(aInHeight, aOutHeight);
-
-  return Align16(CalcCoeffsLen(aInWidth, aOutWidth)) +
-         Align16(CalcBordersLen(aInWidth, aOutWidth)) +
-         Align16(CalcCoeffsLen(aInHeight, aOutHeight)) +
-         Align16(CalcBordersLen(aInHeight, aOutHeight)) +
-         Align16(std::max(tapsX, tapsY) * sizeof(float)) +
-         Align16(aOutWidth * 4 * kTaps * sizeof(float));
-}
-
 void StreamingScaler::InitCoefficients() {
-  int coeffsXLen = Align16(CalcCoeffsLen(mState.mInWidth, mState.mOutWidth));
-  int bordersXLen = Align16(CalcBordersLen(mState.mInWidth, mState.mOutWidth));
-  int coeffsYLen = Align16(CalcCoeffsLen(mState.mInHeight, mState.mOutHeight));
-  int bordersYLen =
-      Align16(CalcBordersLen(mState.mInHeight, mState.mOutHeight));
-  int sumsLen = Align16(mState.mOutWidth * 4 * kTaps * sizeof(float));
-
-  uint8_t* p = mBuffer.get();
-  mState.mCoeffsX = reinterpret_cast<float*>(p);
-  p += coeffsXLen;
-  mState.mBordersX = reinterpret_cast<int*>(p);
-  p += bordersXLen;
-  mState.mCoeffsY = reinterpret_cast<float*>(p);
-  p += coeffsYLen;
-  mState.mBordersY = reinterpret_cast<int*>(p);
-  p += bordersYLen;
-  mState.mSumsY = reinterpret_cast<float*>(p);
-  p += sumsLen;
-  mState.mTmpCoeffs = reinterpret_cast<float*>(p);
+  mState.mCoeffsX = mCoeffsX;
+  mState.mBordersX = mBordersX;
+  mState.mCoeffsY = mCoeffsY;
+  mState.mBordersY = mBordersY;
+  mState.mSumsY = mSumsY;
+  mState.mTmpCoeffs = mTmpCoeffs;
 
   ScaleDownCoeffs(mState.mInWidth, mState.mOutWidth, mState.mCoeffsX,
                   mState.mBordersX, mState.mTmpCoeffs);
@@ -412,7 +374,12 @@ void StreamingScaler::ScaleInputRow(const uint8_t* aIn) {
 
 bool StreamingScaler::Init(const IntSize& aInputSize,
                            const IntSize& aOutputSize, SurfaceFormat aFormat) {
-  mBuffer = nullptr;
+  mCoeffsX.Dealloc();
+  mBordersX.Dealloc();
+  mCoeffsY.Dealloc();
+  mBordersY.Dealloc();
+  mSumsY.Dealloc();
+  mTmpCoeffs.Dealloc();
   mState = {};
 
   switch (aFormat) {
@@ -439,17 +406,20 @@ bool StreamingScaler::Init(const IntSize& aInputSize,
     return false;
   }
 
-  int allocSize = DownscaleAllocSize(inH, outH, inW, outW);
-  if (allocSize <= 0) {
-    return false;
-  }
+  int tapsX = CalcTaps(inW, outW);
+  int tapsY = CalcTaps(inH, outH);
 
-  mBuffer.reset(new (fallible) uint8_t[allocSize]);
-  if (MOZ_UNLIKELY(!mBuffer)) {
+  mCoeffsX.Realloc(kTaps * std::max(inW, outW), true);
+  mBordersX.Realloc(std::min(inW, outW), true);
+  mCoeffsY.Realloc(kTaps * std::max(inH, outH), true);
+  mBordersY.Realloc(std::min(inH, outH), true);
+  mSumsY.Realloc(outW * 4 * kTaps, true);
+  mTmpCoeffs.Realloc(std::max(tapsX, tapsY), true);
+
+  if (!mCoeffsX || !mBordersX || !mCoeffsY || !mBordersY || !mSumsY ||
+      !mTmpCoeffs) {
     return false;
   }
-  memset(mBuffer.get(), 0, allocSize);
-  mBufferSize = allocSize;
 
   mState.mInHeight = inH;
   mState.mOutHeight = outH;
@@ -462,12 +432,12 @@ bool StreamingScaler::Init(const IntSize& aInputSize,
 }
 
 int StreamingScaler::Slots() const {
-  MOZ_ASSERT(mBuffer);
+  MOZ_ASSERT(mBordersY);
   return mState.mBordersY[mState.mOutPos];
 }
 
 void StreamingScaler::FeedRow(const uint8_t* aInputRow) {
-  MOZ_ASSERT(mBuffer);
+  MOZ_ASSERT(mBordersY);
   MOZ_ASSERT(Slots() > 0);
 
 #ifdef USE_SSE2
@@ -489,7 +459,7 @@ void StreamingScaler::FeedRow(const uint8_t* aInputRow) {
 }
 
 void StreamingScaler::ProduceRow(uint8_t* aOutputRow) {
-  MOZ_ASSERT(mBuffer);
+  MOZ_ASSERT(mBordersY);
   MOZ_ASSERT(Slots() == 0);
 
 #ifdef USE_SSE2
@@ -514,13 +484,25 @@ void StreamingScaler::ProduceRow(uint8_t* aOutputRow) {
 }
 
 bool StreamingScaler::OutputComplete() const {
-  MOZ_ASSERT(mBuffer);
+  MOZ_ASSERT(mBordersY);
   return mState.mOutPos >= mState.mOutHeight;
 }
 
 void StreamingScaler::Reset() {
-  if (mBuffer) {
-    memset(mBuffer.get(), 0, mBufferSize);
+  if (mBordersY) {
+    int inW = mState.mInWidth;
+    int outW = mState.mOutWidth;
+    int inH = mState.mInHeight;
+    int outH = mState.mOutHeight;
+    int tapsX = CalcTaps(inW, outW);
+    int tapsY = CalcTaps(inH, outH);
+
+    mCoeffsX.Realloc(kTaps * std::max(inW, outW), true);
+    mBordersX.Realloc(std::min(inW, outW), true);
+    mCoeffsY.Realloc(kTaps * std::max(inH, outH), true);
+    mBordersY.Realloc(std::min(inH, outH), true);
+    mSumsY.Realloc(outW * 4 * kTaps, true);
+    mTmpCoeffs.Realloc(std::max(tapsX, tapsY), true);
     mState.mInPos = mState.mOutPos = 0;
     mState.mSumsYTap = 0;
     InitCoefficients();

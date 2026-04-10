@@ -6,7 +6,7 @@
 #define MOZILLA_GFX_STREAMINGSCALER_H_
 
 #include "mozilla/gfx/2D.h"
-#include "mozilla/UniquePtr.h"
+#include "Tools.h"
 
 namespace mozilla::gfx {
 
@@ -70,8 +70,12 @@ class StreamingScaler final {
 #endif
 
   State mState;
-  UniquePtr<uint8_t[]> mBuffer;
-  int mBufferSize = 0;
+  AlignedArray<float> mCoeffsX;
+  AlignedArray<int> mBordersX;
+  AlignedArray<float> mCoeffsY;
+  AlignedArray<int> mBordersY;
+  AlignedArray<float> mSumsY;
+  AlignedArray<float> mTmpCoeffs;
 };
 
 }  // namespace mozilla::gfx
