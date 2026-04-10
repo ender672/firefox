@@ -107,11 +107,8 @@ static double Map(int aDimIn, int aDimOut, int aPos) {
  * Returns the mapped input position and put the sub-pixel remainder in rest.
  */
 static int SplitMap(int aDimIn, int aDimOut, int aPos, float* aRest) {
-  double smp;
-  int smpI;
-
-  smp = Map(aDimIn, aDimOut, aPos);
-  smpI = smp < 0 ? -1 : smp;
+  double smp = Map(aDimIn, aDimOut, aPos);
+  int smpI = smp < 0 ? -1 : smp;
   *aRest = smp - smpI;
   return smpI;
 }
@@ -124,11 +121,10 @@ static int SplitMap(int aDimIn, int aDimOut, int aPos, float* aRest) {
  * function by two as well in order to avoid aliasing.
  */
 static int CalcTaps(int aDimIn, int aDimOut) {
-  int tmp;
   if (aDimOut > aDimIn) {
     return kTaps;
   }
-  tmp = kTaps * aDimIn / aDimOut;
+  int tmp = kTaps * aDimIn / aDimOut;
   return tmp - (tmp & 1);
 }
 
@@ -147,21 +143,18 @@ static float Catrom(float aX) {
  */
 static void CalcCoeffs(float* aCoeffs, float aTx, int aTaps, int aLtrim,
                        int aRtrim) {
-  int i;
-  float tmp, tapMult, fudge;
-
-  tapMult = static_cast<float>(aTaps) / kTaps;
+  float tapMult = static_cast<float>(aTaps) / kTaps;
   aTx = 1 - aTx - aTaps / 2 + aLtrim;
-  fudge = 0.0f;
+  float fudge = 0.0f;
 
-  for (i = aLtrim; i < aTaps - aRtrim; i++) {
-    tmp = Catrom(fabsf(aTx) / tapMult) / tapMult;
+  for (int i = aLtrim; i < aTaps - aRtrim; i++) {
+    float tmp = Catrom(fabsf(aTx) / tapMult) / tapMult;
     fudge += tmp;
     aCoeffs[i] = tmp;
     aTx += 1;
   }
   fudge = 1 / fudge;
-  for (i = aLtrim; i < aTaps - aRtrim; i++) {
+  for (int i = aLtrim; i < aTaps - aRtrim; i++) {
     aCoeffs[i] *= fudge;
   }
 }
@@ -171,8 +164,7 @@ static void CalcCoeffs(float* aCoeffs, float aTx, int aTaps, int aLtrim,
  * adds the product of sample * coeffs[n] to each accumulator.
  */
 static void AddSampleToSumF(float aSample, float* aCoeffs, float* aSum) {
-  int i;
-  for (i = 0; i < 4; i++) {
+  for (int i = 0; i < 4; i++) {
     aSum[i] += aSample * aCoeffs[i];
   }
 }
@@ -189,14 +181,11 @@ static void ShiftLeftF(float* aF) {
 }
 
 static void YScaleOutBgra(float* aSums, int aWidth, uint8_t* aOut, int aTap) {
-  int i, j, tapOff;
-  float alpha, val;
-
-  tapOff = aTap * 4;
-  for (i = 0; i < aWidth; i++) {
-    alpha = ClampF(aSums[tapOff + 3]);
-    for (j = 0; j < 3; j++) {
-      val = aSums[tapOff + j];
+  int tapOff = aTap * 4;
+  for (int i = 0; i < aWidth; i++) {
+    float alpha = ClampF(aSums[tapOff + 3]);
+    for (int j = 0; j < 3; j++) {
+      float val = aSums[tapOff + j];
       if (alpha != 0) {
         val /= alpha;
       }
@@ -211,11 +200,9 @@ static void YScaleOutBgra(float* aSums, int aWidth, uint8_t* aOut, int aTap) {
 }
 
 static void YScaleOutBgrx(float* aSums, int aWidth, uint8_t* aOut, int aTap) {
-  int i, j, tapOff;
-
-  tapOff = aTap * 4;
-  for (i = 0; i < aWidth; i++) {
-    for (j = 0; j < 3; j++) {
+  int tapOff = aTap * 4;
+  for (int i = 0; i < aWidth; i++) {
+    for (int j = 0; j < 3; j++) {
       aOut[j] = static_cast<int>(roundf(ClampF(aSums[tapOff + j]) * 255.0f));
       aSums[tapOff + j] = 0.0f;
     }
@@ -250,36 +237,32 @@ static void YScaleOut(float* aSums, int aWidth, uint8_t* aOut, bool aHasAlpha,
  */
 static void ScaleDownCoeffs(int aInDim, int aOutDim, float* aCoeffBuf,
                             int* aBorderBuf, float* aTmpCoeffs) {
-  int smpI, i, j, taps, offset, pos, ltrim, rtrim, smpEnd, smpStart, ends[4];
-  float tx;
+  int taps = CalcTaps(aInDim, aOutDim);
+  int ends[4] = {-1, -1, -1, -1};
 
-  taps = CalcTaps(aInDim, aOutDim);
-  for (i = 0; i < 4; i++) {
-    ends[i] = -1;
-  }
+  for (int i = 0; i < aOutDim; i++) {
+    float tx;
+    int smpI = SplitMap(aInDim, aOutDim, i, &tx);
 
-  for (i = 0; i < aOutDim; i++) {
-    smpI = SplitMap(aInDim, aOutDim, i, &tx);
-
-    smpStart = smpI - (taps / 2 - 1);
-    smpEnd = smpI + taps / 2;
+    int smpStart = smpI - (taps / 2 - 1);
+    int smpEnd = smpI + taps / 2;
     if (smpEnd >= aInDim) {
       smpEnd = aInDim - 1;
     }
     ends[i % 4] = smpEnd;
     aBorderBuf[i] = smpEnd - ends[(i + 3) % 4];
 
-    ltrim = 0;
+    int ltrim = 0;
     if (smpStart < 0) {
       ltrim = -1 * smpStart;
     }
-    rtrim = smpStart + (taps - 1) - smpEnd;
+    int rtrim = smpStart + (taps - 1) - smpEnd;
     CalcCoeffs(aTmpCoeffs, tx, taps, ltrim, rtrim);
 
-    for (j = ltrim; j < taps - rtrim; j++) {
-      pos = smpStart + j;
+    for (int j = ltrim; j < taps - rtrim; j++) {
+      int pos = smpStart + j;
 
-      offset = 3;
+      int offset = 3;
       if (pos > ends[(i + 3) % 4]) {
         offset = 0;
       } else if (pos > ends[(i + 2) % 4]) {
@@ -296,13 +279,12 @@ static void ScaleDownCoeffs(int aInDim, int aOutDim, float* aCoeffBuf,
 static void ScaleDownBgra(const uint8_t* aIn, float* aSumsY, int aOutWidth,
                           float* aCoeffsX, int* aBorderBuf, float* aCoeffsY,
                           int aTap) {
-  int i, j, k;
-  float alpha, sum[4][4] = {{0.0f}};
+  float sum[4][4] = {{0.0f}};
 
-  for (i = 0; i < aOutWidth; i++) {
-    for (j = 0; j < aBorderBuf[i]; j++) {
-      alpha = gI2fMap[aIn[3]];
-      for (k = 0; k < 3; k++) {
+  for (int i = 0; i < aOutWidth; i++) {
+    for (int j = 0; j < aBorderBuf[i]; j++) {
+      float alpha = gI2fMap[aIn[3]];
+      for (int k = 0; k < 3; k++) {
         AddSampleToSumF(gI2fMap[aIn[k]] * alpha, aCoeffsX, sum[k]);
       }
       AddSampleToSumF(alpha, aCoeffsX, sum[3]);
@@ -312,11 +294,11 @@ static void ScaleDownBgra(const uint8_t* aIn, float* aSumsY, int aOutWidth,
 
     {
       float samples[4];
-      for (j = 0; j < 4; j++) {
+      for (int j = 0; j < 4; j++) {
         samples[j] = sum[j][0];
         ShiftLeftF(sum[j]);
       }
-      for (j = 0; j < 4; j++) {
+      for (int j = 0; j < 4; j++) {
         float cy = aCoeffsY[j];
         int off = ((aTap + j) & 3) * 4;
         aSumsY[off + 0] += samples[0] * cy;
@@ -332,12 +314,11 @@ static void ScaleDownBgra(const uint8_t* aIn, float* aSumsY, int aOutWidth,
 static void ScaleDownBgrx(const uint8_t* aIn, float* aSumsY, int aOutWidth,
                           float* aCoeffsX, int* aBorderBuf, float* aCoeffsY,
                           int aTap) {
-  int i, j, k;
   float sum[4][4] = {{0.0f}};
 
-  for (i = 0; i < aOutWidth; i++) {
-    for (j = 0; j < aBorderBuf[i]; j++) {
-      for (k = 0; k < 3; k++) {
+  for (int i = 0; i < aOutWidth; i++) {
+    for (int j = 0; j < aBorderBuf[i]; j++) {
+      for (int k = 0; k < 3; k++) {
         AddSampleToSumF(gI2fMap[aIn[k]], aCoeffsX, sum[k]);
       }
       AddSampleToSumF(1.0f, aCoeffsX, sum[3]);
@@ -347,11 +328,11 @@ static void ScaleDownBgrx(const uint8_t* aIn, float* aSumsY, int aOutWidth,
 
     {
       float samples[4];
-      for (j = 0; j < 4; j++) {
+      for (int j = 0; j < 4; j++) {
         samples[j] = sum[j][0];
         ShiftLeftF(sum[j]);
       }
-      for (j = 0; j < 4; j++) {
+      for (int j = 0; j < 4; j++) {
         float cy = aCoeffsY[j];
         int off = ((aTap + j) & 3) * 4;
         aSumsY[off + 0] += samples[0] * cy;
@@ -376,10 +357,8 @@ static int CalcBordersLen(int aInDim, int aOutDim) {
 
 static int DownscaleAllocSize(int aInHeight, int aOutHeight, int aInWidth,
                               int aOutWidth) {
-  int tapsX, tapsY;
-
-  tapsX = CalcTaps(aInWidth, aOutWidth);
-  tapsY = CalcTaps(aInHeight, aOutHeight);
+  int tapsX = CalcTaps(aInWidth, aOutWidth);
+  int tapsY = CalcTaps(aInHeight, aOutHeight);
 
   return Align16(CalcCoeffsLen(aInWidth, aOutWidth)) +
          Align16(CalcBordersLen(aInWidth, aOutWidth)) +
@@ -390,16 +369,13 @@ static int DownscaleAllocSize(int aInHeight, int aOutHeight, int aInWidth,
 }
 
 static void DownscaleInit(StreamingScaler::State* aOs) {
-  int coeffsXLen, coeffsYLen, bordersXLen, bordersYLen, sumsLen;
-  char* p;
+  int coeffsXLen = Align16(CalcCoeffsLen(aOs->mInWidth, aOs->mOutWidth));
+  int bordersXLen = Align16(CalcBordersLen(aOs->mInWidth, aOs->mOutWidth));
+  int coeffsYLen = Align16(CalcCoeffsLen(aOs->mInHeight, aOs->mOutHeight));
+  int bordersYLen = Align16(CalcBordersLen(aOs->mInHeight, aOs->mOutHeight));
+  int sumsLen = Align16(aOs->mOutWidth * 4 * kTaps * sizeof(float));
 
-  coeffsXLen = Align16(CalcCoeffsLen(aOs->mInWidth, aOs->mOutWidth));
-  bordersXLen = Align16(CalcBordersLen(aOs->mInWidth, aOs->mOutWidth));
-  coeffsYLen = Align16(CalcCoeffsLen(aOs->mInHeight, aOs->mOutHeight));
-  bordersYLen = Align16(CalcBordersLen(aOs->mInHeight, aOs->mOutHeight));
-  sumsLen = Align16(aOs->mOutWidth * 4 * kTaps * sizeof(float));
-
-  p = static_cast<char*>(aOs->mBuf);
+  uint8_t* p = aOs->mBuf;
   aOs->mCoeffsX = reinterpret_cast<float*>(p);
   p += coeffsXLen;
   aOs->mBordersX = reinterpret_cast<int*>(p);
@@ -419,9 +395,7 @@ static void DownscaleInit(StreamingScaler::State* aOs) {
 }
 
 static void DownScaleIn(StreamingScaler::State* aOs, const uint8_t* aIn) {
-  float* coeffsY;
-
-  coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
+  float* coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
 
   if (aOs->mHasAlpha) {
     ScaleDownBgra(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
@@ -441,18 +415,10 @@ StreamingScaler::StreamingScaler()
 StreamingScaler::~StreamingScaler() { Free(); }
 
 void StreamingScaler::Free() {
-  if (mInitialized) {
-    mScaler.mBuf = nullptr;
-    mScaler.mCoeffsX = nullptr;
-    mScaler.mBordersX = nullptr;
-    mScaler.mCoeffsY = nullptr;
-    mScaler.mBordersY = nullptr;
-    mScaler.mSumsY = nullptr;
-    mScaler.mTmpCoeffs = nullptr;
-    mInitialized = false;
-  }
   mBuffer = nullptr;
   mBufferSize = 0;
+  mScaler = {};
+  mInitialized = false;
 }
 
 bool StreamingScaler::Init(const IntSize& aInputSize,
@@ -495,7 +461,7 @@ bool StreamingScaler::Init(const IntSize& aInputSize,
   memset(mBuffer.get(), 0, allocSize);
   mBufferSize = allocSize;
 
-  memset(&mScaler, 0, sizeof(State));
+  mScaler = {};
   mScaler.mInHeight = inH;
   mScaler.mOutHeight = outH;
   mScaler.mInWidth = inW;

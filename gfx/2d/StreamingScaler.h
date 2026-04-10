@@ -37,25 +37,25 @@ class StreamingScaler final {
   // True when all output rows have been produced.
   bool OutputComplete() const;
 
- private:
   struct State {
-    int mInHeight;
-    int mOutHeight;
-    int mInWidth;
-    int mOutWidth;
+    int32_t mInHeight;
+    int32_t mOutHeight;
+    int32_t mInWidth;
+    int32_t mOutWidth;
     bool mHasAlpha;
-    int mInPos;
-    int mOutPos;
+    int32_t mInPos;
+    int32_t mOutPos;
     float* mCoeffsY;
     float* mCoeffsX;
     int* mBordersX;
     int* mBordersY;
     float* mSumsY;
     float* mTmpCoeffs;
-    void* mBuf;
-    int mSumsYTap;
+    uint8_t* mBuf;
+    int32_t mSumsYTap;
   };
 
+ private:
   void Free();
 
 #ifdef USE_SSE2

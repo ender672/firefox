@@ -36,22 +36,19 @@ namespace mozilla::gfx {
 
 static void YScaleOutBgrxSse2(float* aSums, int aWidth, uint8_t* aOut,
                               int aTap) {
-  int i, tapOff;
-  __m128 scale, half, one, zero;
+  int tapOff = aTap * 4;
+  __m128 scale = _mm_set1_ps(255.0f);
+  __m128 half = _mm_set1_ps(0.5f);
+  __m128 one = _mm_set1_ps(1.0f);
+  __m128 zero = _mm_setzero_ps();
+  __m128i z = _mm_setzero_si128();
+  __m128i mask = _mm_set_epi32(0, -1, -1, -1);
+  __m128i xVal = _mm_set_epi32(255, 0, 0, 0);
+
   __m128 vals;
   __m128i idx, packed;
-  __m128i z, mask, xVal;
-
-  tapOff = aTap * 4;
-  scale = _mm_set1_ps(255.0f);
-  half = _mm_set1_ps(0.5f);
-  one = _mm_set1_ps(1.0f);
-  zero = _mm_setzero_ps();
-  z = _mm_setzero_si128();
-  mask = _mm_set_epi32(0, -1, -1, -1);
-  xVal = _mm_set_epi32(255, 0, 0, 0);
-
-  for (i = 0; i + 1 < aWidth; i += 2) {
+  int i = 0;
+  for (; i + 1 < aWidth; i += 2) {
     /* Pixel 1: read only the current tap */
     vals = _mm_load_ps(aSums + tapOff);
 
@@ -105,34 +102,29 @@ static void YScaleOutBgrxSse2(float* aSums, int aWidth, uint8_t* aOut,
 static void ScaleDownBgrxSse2(const uint8_t* aIn, float* aSumsYOut,
                               int aOutWidth, float* aCoeffsXF, int* aBorderBuf,
                               float* aCoeffsYF, int aTap) {
-  int i, j;
-  int off0, off1, off2, off3;
-  __m128 coeffsX, coeffsX2, sampleX, sumR, sumG, sumB;
-  __m128 sumR2, sumG2, sumB2;
-  __m128 cy0, cy1, cy2, cy3;
-  const float* lut;
+  const float* lut = gI2fMap;
+  int off0 = aTap * 4;
+  int off1 = ((aTap + 1) & 3) * 4;
+  int off2 = ((aTap + 2) & 3) * 4;
+  int off3 = ((aTap + 3) & 3) * 4;
+  __m128 cy0 = _mm_set1_ps(aCoeffsYF[0]);
+  __m128 cy1 = _mm_set1_ps(aCoeffsYF[1]);
+  __m128 cy2 = _mm_set1_ps(aCoeffsYF[2]);
+  __m128 cy3 = _mm_set1_ps(aCoeffsYF[3]);
 
-  lut = gI2fMap;
-  off0 = aTap * 4;
-  off1 = ((aTap + 1) & 3) * 4;
-  off2 = ((aTap + 2) & 3) * 4;
-  off3 = ((aTap + 3) & 3) * 4;
-  cy0 = _mm_set1_ps(aCoeffsYF[0]);
-  cy1 = _mm_set1_ps(aCoeffsYF[1]);
-  cy2 = _mm_set1_ps(aCoeffsYF[2]);
-  cy3 = _mm_set1_ps(aCoeffsYF[3]);
+  __m128 coeffsX, coeffsX2, sampleX;
+  __m128 sumR = _mm_setzero_ps();
+  __m128 sumG = _mm_setzero_ps();
+  __m128 sumB = _mm_setzero_ps();
 
-  sumR = _mm_setzero_ps();
-  sumG = _mm_setzero_ps();
-  sumB = _mm_setzero_ps();
-
-  for (i = 0; i < aOutWidth; i++) {
+  for (int i = 0; i < aOutWidth; i++) {
     if (aBorderBuf[i] >= 4) {
-      sumR2 = _mm_setzero_ps();
-      sumG2 = _mm_setzero_ps();
-      sumB2 = _mm_setzero_ps();
+      __m128 sumR2 = _mm_setzero_ps();
+      __m128 sumG2 = _mm_setzero_ps();
+      __m128 sumB2 = _mm_setzero_ps();
 
-      for (j = 0; j + 1 < aBorderBuf[i]; j += 2) {
+      int j = 0;
+      for (; j + 1 < aBorderBuf[i]; j += 2) {
         unsigned int px0, px1;
         memcpy(&px0, aIn, 4);
         memcpy(&px1, aIn + 4, 4);
@@ -185,7 +177,7 @@ static void ScaleDownBgrxSse2(const uint8_t* aIn, float* aSumsYOut,
       sumG = _mm_add_ps(sumG, sumG2);
       sumB = _mm_add_ps(sumB, sumB2);
     } else {
-      for (j = 0; j < aBorderBuf[i]; j++) {
+      for (int j = 0; j < aBorderBuf[i]; j++) {
         coeffsX = _mm_load_ps(aCoeffsXF);
 
         sampleX = _mm_set1_ps(lut[aIn[0]]);
@@ -204,11 +196,11 @@ static void ScaleDownBgrxSse2(const uint8_t* aIn, float* aSumsYOut,
 
     /* Vertical accumulation using ring buffer offsets */
     {
-      __m128 rg, bx, bgrx, sy;
+      __m128 rg = _mm_unpacklo_ps(sumR, sumG);
+      __m128 bx = _mm_unpacklo_ps(sumB, sumB);
+      __m128 bgrx = _mm_movelh_ps(rg, bx);
 
-      rg = _mm_unpacklo_ps(sumR, sumG);
-      bx = _mm_unpacklo_ps(sumB, sumB);
-      bgrx = _mm_movelh_ps(rg, bx);
+      __m128 sy;
 
       sy = _mm_load_ps(aSumsYOut + off0);
       sy = _mm_add_ps(_mm_mul_ps(cy0, bgrx), sy);
@@ -237,21 +229,18 @@ static void ScaleDownBgrxSse2(const uint8_t* aIn, float* aSumsYOut,
 
 static void YScaleOutBgraSse2(float* aSums, int aWidth, uint8_t* aOut,
                               int aTap) {
-  int i, tapOff;
-  __m128 scale, half, one, zero;
+  int tapOff = aTap * 4;
+  __m128 scale = _mm_set1_ps(255.0f);
+  __m128 half = _mm_set1_ps(0.5f);
+  __m128 one = _mm_set1_ps(1.0f);
+  __m128 zero = _mm_setzero_ps();
+  __m128i z = _mm_setzero_si128();
+
   __m128 vals, alphaV;
   __m128i idx, packed;
-  __m128i z;
   float alpha;
-
-  tapOff = aTap * 4;
-  scale = _mm_set1_ps(255.0f);
-  half = _mm_set1_ps(0.5f);
-  one = _mm_set1_ps(1.0f);
-  zero = _mm_setzero_ps();
-  z = _mm_setzero_si128();
-
-  for (i = 0; i + 1 < aWidth; i += 2) {
+  int i = 0;
+  for (; i + 1 < aWidth; i += 2) {
     /* Pixel 1: read only the current tap, zero it */
     vals = _mm_load_ps(aSums + tapOff);
 
@@ -332,37 +321,32 @@ static void YScaleOutBgraSse2(float* aSums, int aWidth, uint8_t* aOut,
 static void ScaleDownBgraSse2(const uint8_t* aIn, float* aSumsYOut,
                               int aOutWidth, float* aCoeffsXF, int* aBorderBuf,
                               float* aCoeffsYF, int aTap) {
-  int i, j;
+  int off0 = aTap * 4;
+  int off1 = ((aTap + 1) & 3) * 4;
+  int off2 = ((aTap + 2) & 3) * 4;
+  int off3 = ((aTap + 3) & 3) * 4;
+  __m128 cy0 = _mm_set1_ps(aCoeffsYF[0]);
+  __m128 cy1 = _mm_set1_ps(aCoeffsYF[1]);
+  __m128 cy2 = _mm_set1_ps(aCoeffsYF[2]);
+  __m128 cy3 = _mm_set1_ps(aCoeffsYF[3]);
+
+  const float* lut = gI2fMap;
+
   __m128 coeffsX, coeffsX2, coeffsXA, coeffsX2A, sampleX;
-  __m128 sumR, sumG, sumB, sumA;
-  __m128 sumR2, sumG2, sumB2, sumA2;
-  const float* lut;
-  int off0, off1, off2, off3;
-  __m128 cy0, cy1, cy2, cy3;
-  off0 = aTap * 4;
-  off1 = ((aTap + 1) & 3) * 4;
-  off2 = ((aTap + 2) & 3) * 4;
-  off3 = ((aTap + 3) & 3) * 4;
-  cy0 = _mm_set1_ps(aCoeffsYF[0]);
-  cy1 = _mm_set1_ps(aCoeffsYF[1]);
-  cy2 = _mm_set1_ps(aCoeffsYF[2]);
-  cy3 = _mm_set1_ps(aCoeffsYF[3]);
+  __m128 sumR = _mm_setzero_ps();
+  __m128 sumG = _mm_setzero_ps();
+  __m128 sumB = _mm_setzero_ps();
+  __m128 sumA = _mm_setzero_ps();
 
-  lut = gI2fMap;
-
-  sumR = _mm_setzero_ps();
-  sumG = _mm_setzero_ps();
-  sumB = _mm_setzero_ps();
-  sumA = _mm_setzero_ps();
-
-  for (i = 0; i < aOutWidth; i++) {
+  for (int i = 0; i < aOutWidth; i++) {
     if (aBorderBuf[i] >= 4) {
-      sumR2 = _mm_setzero_ps();
-      sumG2 = _mm_setzero_ps();
-      sumB2 = _mm_setzero_ps();
-      sumA2 = _mm_setzero_ps();
+      __m128 sumR2 = _mm_setzero_ps();
+      __m128 sumG2 = _mm_setzero_ps();
+      __m128 sumB2 = _mm_setzero_ps();
+      __m128 sumA2 = _mm_setzero_ps();
 
-      for (j = 0; j + 1 < aBorderBuf[i]; j += 2) {
+      int j = 0;
+      for (; j + 1 < aBorderBuf[i]; j += 2) {
         unsigned int px0, px1;
         memcpy(&px0, aIn, 4);
         memcpy(&px1, aIn + 4, 4);
@@ -428,7 +412,7 @@ static void ScaleDownBgraSse2(const uint8_t* aIn, float* aSumsYOut,
       sumB = _mm_add_ps(sumB, sumB2);
       sumA = _mm_add_ps(sumA, sumA2);
     } else {
-      for (j = 0; j < aBorderBuf[i]; j++) {
+      for (int j = 0; j < aBorderBuf[i]; j++) {
         coeffsX = _mm_load_ps(aCoeffsXF);
 
         coeffsXA = _mm_mul_ps(coeffsX, _mm_set1_ps(lut[aIn[3]]));
@@ -451,11 +435,9 @@ static void ScaleDownBgraSse2(const uint8_t* aIn, float* aSumsYOut,
 
     /* Vertical accumulation using ring buffer offsets */
     {
-      __m128 rg, ba, bgra;
-
-      rg = _mm_unpacklo_ps(sumR, sumG);
-      ba = _mm_unpacklo_ps(sumB, sumA);
-      bgra = _mm_movelh_ps(rg, ba);
+      __m128 rg = _mm_unpacklo_ps(sumR, sumG);
+      __m128 ba = _mm_unpacklo_ps(sumB, sumA);
+      __m128 bgra = _mm_movelh_ps(rg, ba);
 
       {
         __m128 sy;
@@ -495,9 +477,7 @@ static void YScaleOutSse2(float* aSums, int aWidth, uint8_t* aOut,
 }
 
 static void DownScaleInSse2(StreamingScaler::State* aOs, const uint8_t* aIn) {
-  float* coeffsY;
-
-  coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
+  float* coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
 
   if (aOs->mHasAlpha) {
     ScaleDownBgraSse2(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
