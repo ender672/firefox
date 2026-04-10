@@ -36,6 +36,7 @@ class StreamingScaler final {
   // True when all output rows have been produced.
   [[nodiscard]] bool OutputComplete() const;
 
+ private:
   struct State {
     int32_t mInHeight = 0;
     int32_t mOutHeight = 0;
@@ -53,7 +54,6 @@ class StreamingScaler final {
     int32_t mSumsYTap = 0;
   };
 
- private:
   void InitCoefficients();
   void ScaleInputRow(const uint8_t* aIn);
 
