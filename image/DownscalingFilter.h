@@ -23,9 +23,9 @@
 #include "mozilla/gfx/2D.h"
 
 #include "mozilla/gfx/ConvolutionFilter.h"
+#include "mozilla/gfx/StreamingScaler.h"
 #include "mozilla/StaticPrefs_image.h"
 
-#include "OilDownscaler.h"
 #include "SurfacePipe.h"
 
 namespace mozilla {
@@ -346,7 +346,7 @@ class DownscalingFilter final : public SurfaceFilter {
 
   gfx::SurfaceFormat mFormat;  /// The image format
 
-  OilDownscaler mOilDownscaler;
+  gfx::StreamingScaler mOilDownscaler;
   bool mUseOil;
 };
 

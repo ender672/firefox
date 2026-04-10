@@ -48,6 +48,7 @@ UNIFIED_SOURCES += [
         "TestBugs.cpp",
         "TestCairo.cpp",
         "TestScaling.cpp",
+        "TestStreamingScaler.cpp",
     ]
 ]
 

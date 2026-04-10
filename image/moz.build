@@ -116,7 +116,6 @@ UNIFIED_SOURCES += [
 
 UNIFIED_SOURCES += [
     "Downscaler.cpp",
-    "OilDownscaler.cpp",
 ]
 
 if CONFIG["MOZ_WIDGET_TOOLKIT"] == "windows":
@@ -146,8 +145,6 @@ LOCAL_INCLUDES += [
     "/netwerk/base",
     # For nsHttpChannel.h
     "/netwerk/protocol/http",
-    # For liboil downscaler
-    "/third_party/liboil",
     # DecodePool uses thread-related facilities.
     "/xpcom/threads",
 ]

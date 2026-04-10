@@ -5,6 +5,7 @@
 #include "SanityChecks.h"
 #include "TestPoint.h"
 #include "TestScaling.h"
+#include "TestStreamingScaler.h"
 #include "TestBugs.h"
 
 #include <string>
@@ -19,7 +20,9 @@ int main() {
   TestObject tests[] = {
       {new SanityChecks(), "Sanity Checks"},
       {new TestPoint(), "Point Tests"},
-      {new TestScaling(), "Scaling Tests"} {new TestBugs(), "Bug Tests"}};
+      {new TestScaling(), "Scaling Tests"},
+      {new TestStreamingScaler(), "Streaming Scaler Tests"},
+      {new TestBugs(), "Bug Tests"}};
 
   int totalFailures = 0;
   int totalTests = 0;

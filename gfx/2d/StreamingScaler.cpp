@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "OilDownscaler.h"
+#include "StreamingScaler.h"
 
 #include <mutex>
 #include <cstring>
@@ -18,21 +18,21 @@
 #endif
 
 namespace mozilla {
-namespace image {
+namespace gfx {
 
 /* static */
-void OilDownscaler::EnsureGlobalInit() {
+void StreamingScaler::EnsureGlobalInit() {
   static std::once_flag sOnce;
   std::call_once(sOnce, [] { oil_global_init(); });
 }
 
-OilDownscaler::OilDownscaler() : mBufferSize(0), mInitialized(false) {
+StreamingScaler::StreamingScaler() : mBufferSize(0), mInitialized(false) {
   memset(&mScaler, 0, sizeof(mScaler));
 }
 
-OilDownscaler::~OilDownscaler() { Free(); }
+StreamingScaler::~StreamingScaler() { Free(); }
 
-void OilDownscaler::Free() {
+void StreamingScaler::Free() {
   if (mInitialized) {
     // We own the buffer, so don't call oil_scale_free() which would
     // free() it. Just clear the struct and release our buffer.
@@ -43,20 +43,22 @@ void OilDownscaler::Free() {
   mBufferSize = 0;
 }
 
-bool OilDownscaler::Init(int32_t aInputWidth, int32_t aInputHeight,
-                         int32_t aOutputWidth, int32_t aOutputHeight,
-                         gfx::SurfaceFormat aFormat) {
+bool StreamingScaler::Init(int32_t aInputWidth, int32_t aInputHeight,
+                           int32_t aOutputWidth, int32_t aOutputHeight,
+                           SurfaceFormat aFormat) {
   Free();
   EnsureGlobalInit();
 
   oil_colorspace cs;
   switch (aFormat) {
-    case gfx::SurfaceFormat::OS_RGBA:
-    case gfx::SurfaceFormat::OS_RGBX:
-      // BGRA and RGBA are both 4-component; resampling is channel-independent
+    case SurfaceFormat::B8G8R8A8:
+    case SurfaceFormat::B8G8R8X8:
+    case SurfaceFormat::R8G8B8A8:
+    case SurfaceFormat::R8G8B8X8:
+      // These are all 4-component; resampling is channel-independent
       // so byte order doesn't matter. Use RGBX for opaque to skip alpha
       // premultiply.
-      cs = gfx::IsOpaque(aFormat) ? OIL_CS_RGBX_NOGAMMA : OIL_CS_RGBA_NOGAMMA;
+      cs = IsOpaque(aFormat) ? OIL_CS_RGBX_NOGAMMA : OIL_CS_RGBA_NOGAMMA;
       break;
     default:
       return false;
@@ -88,12 +90,12 @@ bool OilDownscaler::Init(int32_t aInputWidth, int32_t aInputHeight,
   return true;
 }
 
-int OilDownscaler::Slots() const {
+int StreamingScaler::Slots() const {
   MOZ_ASSERT(mInitialized);
   return oil_scale_slots(const_cast<oil_scale*>(&mScaler));
 }
 
-void OilDownscaler::FeedRow(const uint8_t* aInputRow) {
+void StreamingScaler::FeedRow(const uint8_t* aInputRow) {
   MOZ_ASSERT(mInitialized);
   unsigned char* in = const_cast<unsigned char*>(aInputRow);
 #ifdef USE_SSE2
@@ -114,7 +116,7 @@ void OilDownscaler::FeedRow(const uint8_t* aInputRow) {
   oil_scale_in(&mScaler, in);
 }
 
-void OilDownscaler::ProduceRow(uint8_t* aOutputRow) {
+void StreamingScaler::ProduceRow(uint8_t* aOutputRow) {
   MOZ_ASSERT(mInitialized);
 #ifdef USE_SSE2
   if (mozilla::supports_avx2()) {
@@ -134,12 +136,12 @@ void OilDownscaler::ProduceRow(uint8_t* aOutputRow) {
   oil_scale_out(&mScaler, aOutputRow);
 }
 
-bool OilDownscaler::OutputComplete() const {
+bool StreamingScaler::OutputComplete() const {
   MOZ_ASSERT(mInitialized);
   return mScaler.out_pos >= mScaler.out_height;
 }
 
-void OilDownscaler::Reset() {
+void StreamingScaler::Reset() {
   if (mInitialized) {
     memset(mBuffer.get(), 0, mBufferSize);
     int ret = oil_scale_init_allocated(
@@ -151,5 +153,5 @@ void OilDownscaler::Reset() {
   }
 }
 
-}  // namespace image
+}  // namespace gfx
 }  // namespace mozilla

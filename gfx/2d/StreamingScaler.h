@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#ifndef mozilla_image_OilDownscaler_h
-#define mozilla_image_OilDownscaler_h
+#ifndef mozilla_gfx_StreamingScaler_h
+#define mozilla_gfx_StreamingScaler_h
 
 #include "mozilla/gfx/2D.h"
 #include "mozilla/UniquePtr.h"
@@ -13,25 +13,28 @@ extern "C" {
 }
 
 namespace mozilla {
-namespace image {
+namespace gfx {
 
-// Thin wrapper around liboil's streaming scaler for use in DownscalingFilter.
-// Maps the row-by-row SurfacePipe pattern to liboil's
-// oil_scale_in()/oil_scale_out() API.
-//
-// Manages the scaler's backing buffer using Firefox's allocator so that
-// allocations are tracked via jemalloc and the buffer can be reused across
-// progressive passes without re-allocating.
-class OilDownscaler {
+/**
+ * StreamingScaler is a thin wrapper around liboil's streaming scaler.
+ *
+ * It maps the row-by-row streaming pattern to liboil's oil_scale_in() and
+ * oil_scale_out() API.
+ *
+ * It manages the scaler's backing buffer using Firefox's allocator so that
+ * allocations are tracked via jemalloc and the buffer can be reused across
+ * progressive passes without re-allocating.
+ */
+class StreamingScaler {
  public:
-  OilDownscaler();
-  ~OilDownscaler();
+  StreamingScaler();
+  ~StreamingScaler();
 
-  OilDownscaler(const OilDownscaler&) = delete;
-  OilDownscaler& operator=(const OilDownscaler&) = delete;
+  StreamingScaler(const StreamingScaler&) = delete;
+  StreamingScaler& operator=(const StreamingScaler&) = delete;
 
   bool Init(int32_t aInputWidth, int32_t aInputHeight, int32_t aOutputWidth,
-            int32_t aOutputHeight, gfx::SurfaceFormat aFormat);
+            int32_t aOutputHeight, SurfaceFormat aFormat);
 
   // Reset for a new progressive pass over the same frame dimensions.
   void Reset();
@@ -56,7 +59,7 @@ class OilDownscaler {
   bool mInitialized;
 };
 
-}  // namespace image
+}  // namespace gfx
 }  // namespace mozilla
 
-#endif  // mozilla_image_OilDownscaler_h
+#endif  // mozilla_gfx_StreamingScaler_h

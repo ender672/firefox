@@ -5,6 +5,7 @@
 #include "gtest/gtest.h"
 #include "TestBase.h"
 #include "TestScaling.h"
+#include "TestStreamingScaler.h"
 #include "TestBugs.h"
 
 TEST(Moz2D, Bugs)
@@ -20,6 +21,16 @@ TEST(Moz2D, Bugs)
 TEST(Moz2D, Scaling)
 {
   TestBase* test = new TestScaling();
+  int failures = 0;
+  test->RunTests(&failures);
+  delete test;
+
+  ASSERT_EQ(failures, 0);
+}
+
+TEST(Moz2D, StreamingScaler)
+{
+  TestBase* test = new TestStreamingScaler();
   int failures = 0;
   test->RunTests(&failures);
   delete test;

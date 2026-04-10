@@ -56,6 +56,7 @@ EXPORTS.mozilla.gfx += [
     "SourceSurfaceCairo.h",
     "SourceSurfaceRawData.h",
     "StackArray.h",
+    "StreamingScaler.h",
     "Swizzle.h",
     "Tools.h",
     "Triangle.h",
@@ -172,6 +173,7 @@ UNIFIED_SOURCES += [
     "SourceSurfaceCairo.cpp",
     "SourceSurfaceRawData.cpp",
     "SourceSurfaceSkia.cpp",
+    "StreamingScaler.cpp",
     "Swizzle.cpp",
     "Types.cpp",
 ]
@@ -209,4 +211,5 @@ if CONFIG["MOZ_WIDGET_TOOLKIT"] in ("android", "gtk"):
 LOCAL_INCLUDES += CONFIG["SKIA_INCLUDES"]
 LOCAL_INCLUDES += [
     "/gfx/cairo/cairo/src",
+    "/third_party/liboil",
 ]
