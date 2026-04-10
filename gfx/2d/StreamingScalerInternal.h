@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#ifndef GFX_2D_STREAMINGSCALERINTERNAL_H_
-#define GFX_2D_STREAMINGSCALERINTERNAL_H_
+#ifndef MOZILLA_GFX_STREAMINGSCALERINTERNAL_H_
+#define MOZILLA_GFX_STREAMINGSCALERINTERNAL_H_
 
 namespace mozilla::gfx {
 
@@ -12,4 +12,4 @@ extern const float gI2fMap[256];
 
 }  // namespace mozilla::gfx
 
-#endif  // GFX_2D_STREAMINGSCALERINTERNAL_H_
+#endif  // MOZILLA_GFX_STREAMINGSCALERINTERNAL_H_

@@ -25,6 +25,7 @@
 
 #include "StreamingScaler.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -91,27 +92,7 @@ static constexpr int kMaxDimension = 1000000;
  */
 static constexpr int kTaps = 4;
 
-static int Max(int aA, int aB) { return aA > aB ? aA : aB; }
-
-static int Min(int aA, int aB) { return aA < aB ? aA : aB; }
-
-/**
- * Clamp a float between 0 and 1.
- */
-static float ClampF(float aX) {
-  if (aX > 1.0f) {
-    return 1.0f;
-  } else if (aX < 0.0f) {
-    return 0.0f;
-  }
-  return aX;
-}
-
-/**
- * Convert a float to an int. When compiling on x86 without march=native, this
- * performs much better than roundf().
- */
-static int F2I(float aX) { return aX + 0.5f; }
+static float ClampF(float aX) { return std::clamp(aX, 0.0f, 1.0f); }
 
 /**
  * Map from the discreet dest coordinate pos to a continuous source coordinate.
@@ -207,7 +188,7 @@ static void ShiftLeftF(float* aF) {
   aF[3] = 0.0f;
 }
 
-static void YScaleOutBgra(float* aSums, int aWidth, unsigned char* aOut,
+static void YScaleOutBgra(float* aSums, int aWidth, uint8_t* aOut,
                           int aTap) {
   int i, j, tapOff;
   float alpha, val;
@@ -220,7 +201,7 @@ static void YScaleOutBgra(float* aSums, int aWidth, unsigned char* aOut,
       if (alpha != 0) {
         val /= alpha;
       }
-      aOut[j] = F2I(ClampF(val) * 255.0f);
+      aOut[j] = static_cast<int>(roundf(ClampF(val) * 255.0f));
       aSums[tapOff + j] = 0.0f;
     }
     aOut[3] = round(alpha * 255.0f);
@@ -230,14 +211,14 @@ static void YScaleOutBgra(float* aSums, int aWidth, unsigned char* aOut,
   }
 }
 
-static void YScaleOutBgrx(float* aSums, int aWidth, unsigned char* aOut,
+static void YScaleOutBgrx(float* aSums, int aWidth, uint8_t* aOut,
                           int aTap) {
   int i, j, tapOff;
 
   tapOff = aTap * 4;
   for (i = 0; i < aWidth; i++) {
     for (j = 0; j < 3; j++) {
-      aOut[j] = F2I(ClampF(aSums[tapOff + j]) * 255.0f);
+      aOut[j] = static_cast<int>(roundf(ClampF(aSums[tapOff + j]) * 255.0f));
       aSums[tapOff + j] = 0.0f;
     }
     aOut[3] = 255;
@@ -247,7 +228,7 @@ static void YScaleOutBgrx(float* aSums, int aWidth, unsigned char* aOut,
   }
 }
 
-static void YScaleOut(float* aSums, int aWidth, unsigned char* aOut,
+static void YScaleOut(float* aSums, int aWidth, uint8_t* aOut,
                       StreamingScaler::Colorspace aCs, int aTap) {
   switch (aCs) {
     case StreamingScaler::Colorspace::Bgra:
@@ -317,7 +298,7 @@ static void ScaleDownCoeffs(int aInDim, int aOutDim, float* aCoeffBuf,
   }
 }
 
-static void ScaleDownBgra(const unsigned char* aIn, float* aSumsY,
+static void ScaleDownBgra(const uint8_t* aIn, float* aSumsY,
                           int aOutWidth, float* aCoeffsX, int* aBorderBuf,
                           float* aCoeffsY, int aTap) {
   int i, j, k;
@@ -353,7 +334,7 @@ static void ScaleDownBgra(const unsigned char* aIn, float* aSumsY,
   }
 }
 
-static void ScaleDownBgrx(const unsigned char* aIn, float* aSumsY,
+static void ScaleDownBgrx(const uint8_t* aIn, float* aSumsY,
                           int aOutWidth, float* aCoeffsX, int* aBorderBuf,
                           float* aCoeffsY, int aTap) {
   int i, j, k;
@@ -391,11 +372,11 @@ static void ScaleDownBgrx(const unsigned char* aIn, float* aSumsY,
 static constexpr int Align16(int aX) { return (aX + 15) & ~15; }
 
 static int CalcCoeffsLen(int aInDim, int aOutDim) {
-  return kTaps * Max(aInDim, aOutDim) * sizeof(float);
+  return kTaps * std::max(aInDim, aOutDim) * sizeof(float);
 }
 
 static int CalcBordersLen(int aInDim, int aOutDim) {
-  return Min(aInDim, aOutDim) * sizeof(int);
+  return std::min(aInDim, aOutDim) * sizeof(int);
 }
 
 static int DownscaleAllocSize(int aInHeight, int aOutHeight, int aInWidth,
@@ -409,7 +390,7 @@ static int DownscaleAllocSize(int aInHeight, int aOutHeight, int aInWidth,
          Align16(CalcBordersLen(aInWidth, aOutWidth)) +
          Align16(CalcCoeffsLen(aInHeight, aOutHeight)) +
          Align16(CalcBordersLen(aInHeight, aOutHeight)) +
-         Align16(Max(tapsX, tapsY) * sizeof(float)) +
+         Align16(std::max(tapsX, tapsY) * sizeof(float)) +
          Align16(aOutWidth * 4 * kTaps * sizeof(float));
 }
 
@@ -442,7 +423,7 @@ static void DownscaleInit(StreamingScaler::State* aOs) {
                   aOs->mBordersY, aOs->mTmpCoeffs);
 }
 
-static void DownScaleIn(StreamingScaler::State* aOs, const unsigned char* aIn) {
+static void DownScaleIn(StreamingScaler::State* aOs, const uint8_t* aIn) {
   float* coeffsY;
 
   coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
@@ -552,16 +533,16 @@ void StreamingScaler::FeedRow(const uint8_t* aInputRow) {
 
 #ifdef USE_SSE2
   if (mozilla::supports_avx2()) {
-    (void)InAvx2(&mScaler, aInputRow);
+    InAvx2(&mScaler, aInputRow);
     return;
   }
   if (mozilla::supports_sse2()) {
-    (void)InSse2(&mScaler, aInputRow);
+    InSse2(&mScaler, aInputRow);
     return;
   }
 #elif defined(USE_NEON)
   if (mozilla::supports_neon()) {
-    (void)InNeon(&mScaler, aInputRow);
+    InNeon(&mScaler, aInputRow);
     return;
   }
 #endif
@@ -574,16 +555,16 @@ void StreamingScaler::ProduceRow(uint8_t* aOutputRow) {
 
 #ifdef USE_SSE2
   if (mozilla::supports_avx2()) {
-    (void)OutAvx2(&mScaler, aOutputRow);
+    OutAvx2(&mScaler, aOutputRow);
     return;
   }
   if (mozilla::supports_sse2()) {
-    (void)OutSse2(&mScaler, aOutputRow);
+    OutSse2(&mScaler, aOutputRow);
     return;
   }
 #elif defined(USE_NEON)
   if (mozilla::supports_neon()) {
-    (void)OutNeon(&mScaler, aOutputRow);
+    OutNeon(&mScaler, aOutputRow);
     return;
   }
 #endif

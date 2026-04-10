@@ -28,11 +28,13 @@
 #include <arm_neon.h>
 #include <cstring>
 
+#include "mozilla/Assertions.h"
+
 #include "StreamingScalerInternal.h"
 
 namespace mozilla::gfx {
 
-static void YScaleOutBgraNeon(float* aSums, int aWidth, unsigned char* aOut,
+static void YScaleOutBgraNeon(float* aSums, int aWidth, uint8_t* aOut,
                               int aTap) {
   int i, tapOff;
   float32x4_t scaleV, one, zero, half;
@@ -83,7 +85,7 @@ static void YScaleOutBgraNeon(float* aSums, int aWidth, unsigned char* aOut,
   }
 }
 
-static void ScaleDownBgraNeon(const unsigned char* aIn, float* aSumsYOut,
+static void ScaleDownBgraNeon(const uint8_t* aIn, float* aSumsYOut,
                                  int aOutWidth, float* aCoeffsXF,
                                  int* aBorderBuf, float* aCoeffsYF, int aTap) {
   int i, j;
@@ -239,7 +241,7 @@ static void ScaleDownBgraNeon(const unsigned char* aIn, float* aSumsYOut,
   }
 }
 
-static void YScaleOutBgrxNeon(float* aSums, int aWidth, unsigned char* aOut,
+static void YScaleOutBgrxNeon(float* aSums, int aWidth, uint8_t* aOut,
                               int aTap) {
   int i, tapOff;
   float32x4_t scaleV, one, zero, half;
@@ -328,7 +330,7 @@ static void YScaleOutBgrxNeon(float* aSums, int aWidth, unsigned char* aOut,
   }
 }
 
-static void ScaleDownBgrxNeon(const unsigned char* aIn, float* aSumsYOut,
+static void ScaleDownBgrxNeon(const uint8_t* aIn, float* aSumsYOut,
                                  int aOutWidth, float* aCoeffsXF,
                                  int* aBorderBuf, float* aCoeffsYF, int aTap) {
   int i, j;
@@ -479,7 +481,7 @@ static void ScaleDownBgrxNeon(const unsigned char* aIn, float* aSumsYOut,
 
 /* NEON dispatch functions */
 
-static void YScaleOutNeon(float* aSums, int aWidth, unsigned char* aOut,
+static void YScaleOutNeon(float* aSums, int aWidth, uint8_t* aOut,
                           StreamingScaler::Colorspace aCs, int aTap) {
   switch (aCs) {
     case StreamingScaler::Colorspace::Bgra:
@@ -492,7 +494,7 @@ static void YScaleOutNeon(float* aSums, int aWidth, unsigned char* aOut,
 }
 
 static void DownScaleInNeon(StreamingScaler::State* aOs,
-                           const unsigned char* aIn) {
+                           const uint8_t* aIn) {
   float* coeffsY;
 
   coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
@@ -512,24 +514,16 @@ static void DownScaleInNeon(StreamingScaler::State* aOs,
   aOs->mInPos++;
 }
 
-int StreamingScaler::InNeon(State* aOs, const unsigned char* aIn) {
-  if (aOs->mBordersY[aOs->mOutPos] == 0) {
-    return -1;
-  }
+void StreamingScaler::InNeon(State* aOs, const uint8_t* aIn) {
+  MOZ_ASSERT(aOs->mBordersY[aOs->mOutPos] != 0);
   DownScaleInNeon(aOs, aIn);
-  return 0;
 }
 
-int StreamingScaler::OutNeon(State* aOs, unsigned char* aOut) {
-  if (aOs->mBordersY[aOs->mOutPos] != 0) {
-    return -1;
-  }
-
+void StreamingScaler::OutNeon(State* aOs, uint8_t* aOut) {
+  MOZ_ASSERT(aOs->mBordersY[aOs->mOutPos] == 0);
   YScaleOutNeon(aOs->mSumsY, aOs->mOutWidth, aOut, aOs->mCs, aOs->mSumsYTap);
   aOs->mSumsYTap = (aOs->mSumsYTap + 1) & 3;
-
   aOs->mOutPos++;
-  return 0;
 }
 
 }  // namespace mozilla::gfx

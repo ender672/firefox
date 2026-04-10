@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#ifndef GFX_2D_STREAMINGSCALER_H_
-#define GFX_2D_STREAMINGSCALER_H_
+#ifndef MOZILLA_GFX_STREAMINGSCALER_H_
+#define MOZILLA_GFX_STREAMINGSCALER_H_
 
 #include "mozilla/gfx/2D.h"
 #include "mozilla/UniquePtr.h"
@@ -65,19 +65,19 @@ class StreamingScaler {
   // True when all output rows have been produced.
   bool OutputComplete() const;
 
+ private:
 #ifdef USE_SSE2
-  static int InSse2(State* aOs, const unsigned char* aIn);
-  static int OutSse2(State* aOs, unsigned char* aOut);
-  static int InAvx2(State* aOs, const unsigned char* aIn);
-  static int OutAvx2(State* aOs, unsigned char* aOut);
+  static void InSse2(State* aOs, const uint8_t* aIn);
+  static void OutSse2(State* aOs, uint8_t* aOut);
+  static void InAvx2(State* aOs, const uint8_t* aIn);
+  static void OutAvx2(State* aOs, uint8_t* aOut);
 #endif
 
 #ifdef USE_NEON
-  static int InNeon(State* aOs, const unsigned char* aIn);
-  static int OutNeon(State* aOs, unsigned char* aOut);
+  static void InNeon(State* aOs, const uint8_t* aIn);
+  static void OutNeon(State* aOs, uint8_t* aOut);
 #endif
 
- private:
   State mScaler;
   UniquePtr<uint8_t[]> mBuffer;
   int mBufferSize;
@@ -86,4 +86,4 @@ class StreamingScaler {
 
 }  // namespace mozilla::gfx
 
-#endif  // GFX_2D_STREAMINGSCALER_H_
+#endif  // MOZILLA_GFX_STREAMINGSCALER_H_

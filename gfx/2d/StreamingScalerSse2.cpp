@@ -28,11 +28,13 @@
 #include <cstring>
 #include <immintrin.h>
 
+#include "mozilla/Assertions.h"
+
 #include "StreamingScalerInternal.h"
 
 namespace mozilla::gfx {
 
-static void YScaleOutBgrxSse2(float* aSums, int aWidth, unsigned char* aOut,
+static void YScaleOutBgrxSse2(float* aSums, int aWidth, uint8_t* aOut,
                               int aTap) {
   int i, tapOff;
   __m128 scale, half, one, zero;
@@ -100,7 +102,7 @@ static void YScaleOutBgrxSse2(float* aSums, int aWidth, unsigned char* aOut,
   }
 }
 
-static void ScaleDownBgrxSse2(const unsigned char* aIn, float* aSumsYOut,
+static void ScaleDownBgrxSse2(const uint8_t* aIn, float* aSumsYOut,
                               int aOutWidth, float* aCoeffsXF,
                               int* aBorderBuf, float* aCoeffsYF, int aTap) {
   int i, j;
@@ -233,7 +235,7 @@ static void ScaleDownBgrxSse2(const unsigned char* aIn, float* aSumsYOut,
   }
 }
 
-static void YScaleOutBgraSse2(float* aSums, int aWidth, unsigned char* aOut,
+static void YScaleOutBgraSse2(float* aSums, int aWidth, uint8_t* aOut,
                               int aTap) {
   int i, tapOff;
   __m128 scale, half, one, zero;
@@ -327,7 +329,7 @@ static void YScaleOutBgraSse2(float* aSums, int aWidth, unsigned char* aOut,
   }
 }
 
-static void ScaleDownBgraSse2(const unsigned char* aIn, float* aSumsYOut,
+static void ScaleDownBgraSse2(const uint8_t* aIn, float* aSumsYOut,
                               int aOutWidth, float* aCoeffsXF,
                               int* aBorderBuf, float* aCoeffsYF, int aTap) {
   int i, j;
@@ -483,7 +485,7 @@ static void ScaleDownBgraSse2(const unsigned char* aIn, float* aSumsYOut,
   }
 }
 
-static void YScaleOutSse2(float* aSums, int aWidth, unsigned char* aOut,
+static void YScaleOutSse2(float* aSums, int aWidth, uint8_t* aOut,
                           StreamingScaler::Colorspace aCs, int aTap) {
   switch (aCs) {
     case StreamingScaler::Colorspace::Bgra:
@@ -496,7 +498,7 @@ static void YScaleOutSse2(float* aSums, int aWidth, unsigned char* aOut,
 }
 
 static void DownScaleInSse2(StreamingScaler::State* aOs,
-                            const unsigned char* aIn) {
+                            const uint8_t* aIn) {
   float* coeffsY;
 
   coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
@@ -516,24 +518,16 @@ static void DownScaleInSse2(StreamingScaler::State* aOs,
   aOs->mInPos++;
 }
 
-int StreamingScaler::InSse2(State* aOs, const unsigned char* aIn) {
-  if (aOs->mBordersY[aOs->mOutPos] == 0) {
-    return -1;
-  }
+void StreamingScaler::InSse2(State* aOs, const uint8_t* aIn) {
+  MOZ_ASSERT(aOs->mBordersY[aOs->mOutPos] != 0);
   DownScaleInSse2(aOs, aIn);
-  return 0;
 }
 
-int StreamingScaler::OutSse2(State* aOs, unsigned char* aOut) {
-  if (aOs->mBordersY[aOs->mOutPos] != 0) {
-    return -1;
-  }
-
+void StreamingScaler::OutSse2(State* aOs, uint8_t* aOut) {
+  MOZ_ASSERT(aOs->mBordersY[aOs->mOutPos] == 0);
   YScaleOutSse2(aOs->mSumsY, aOs->mOutWidth, aOut, aOs->mCs, aOs->mSumsYTap);
   aOs->mSumsYTap = (aOs->mSumsYTap + 1) & 3;
-
   aOs->mOutPos++;
-  return 0;
 }
 
 }  // namespace mozilla::gfx
