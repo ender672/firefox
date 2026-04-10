@@ -368,62 +368,52 @@ static int DownscaleAllocSize(int aInHeight, int aOutHeight, int aInWidth,
          Align16(aOutWidth * 4 * kTaps * sizeof(float));
 }
 
-static void DownscaleInit(StreamingScaler::State* aOs) {
-  int coeffsXLen = Align16(CalcCoeffsLen(aOs->mInWidth, aOs->mOutWidth));
-  int bordersXLen = Align16(CalcBordersLen(aOs->mInWidth, aOs->mOutWidth));
-  int coeffsYLen = Align16(CalcCoeffsLen(aOs->mInHeight, aOs->mOutHeight));
-  int bordersYLen = Align16(CalcBordersLen(aOs->mInHeight, aOs->mOutHeight));
-  int sumsLen = Align16(aOs->mOutWidth * 4 * kTaps * sizeof(float));
+void StreamingScaler::InitCoefficients() {
+  int coeffsXLen = Align16(CalcCoeffsLen(mState.mInWidth, mState.mOutWidth));
+  int bordersXLen = Align16(CalcBordersLen(mState.mInWidth, mState.mOutWidth));
+  int coeffsYLen = Align16(CalcCoeffsLen(mState.mInHeight, mState.mOutHeight));
+  int bordersYLen =
+      Align16(CalcBordersLen(mState.mInHeight, mState.mOutHeight));
+  int sumsLen = Align16(mState.mOutWidth * 4 * kTaps * sizeof(float));
 
-  uint8_t* p = aOs->mBuf;
-  aOs->mCoeffsX = reinterpret_cast<float*>(p);
+  uint8_t* p = mBuffer.get();
+  mState.mCoeffsX = reinterpret_cast<float*>(p);
   p += coeffsXLen;
-  aOs->mBordersX = reinterpret_cast<int*>(p);
+  mState.mBordersX = reinterpret_cast<int*>(p);
   p += bordersXLen;
-  aOs->mCoeffsY = reinterpret_cast<float*>(p);
+  mState.mCoeffsY = reinterpret_cast<float*>(p);
   p += coeffsYLen;
-  aOs->mBordersY = reinterpret_cast<int*>(p);
+  mState.mBordersY = reinterpret_cast<int*>(p);
   p += bordersYLen;
-  aOs->mSumsY = reinterpret_cast<float*>(p);
+  mState.mSumsY = reinterpret_cast<float*>(p);
   p += sumsLen;
-  aOs->mTmpCoeffs = reinterpret_cast<float*>(p);
+  mState.mTmpCoeffs = reinterpret_cast<float*>(p);
 
-  ScaleDownCoeffs(aOs->mInWidth, aOs->mOutWidth, aOs->mCoeffsX, aOs->mBordersX,
-                  aOs->mTmpCoeffs);
-  ScaleDownCoeffs(aOs->mInHeight, aOs->mOutHeight, aOs->mCoeffsY,
-                  aOs->mBordersY, aOs->mTmpCoeffs);
+  ScaleDownCoeffs(mState.mInWidth, mState.mOutWidth, mState.mCoeffsX,
+                  mState.mBordersX, mState.mTmpCoeffs);
+  ScaleDownCoeffs(mState.mInHeight, mState.mOutHeight, mState.mCoeffsY,
+                  mState.mBordersY, mState.mTmpCoeffs);
 }
 
-static void DownScaleIn(StreamingScaler::State* aOs, const uint8_t* aIn) {
-  float* coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
+void StreamingScaler::ScaleInputRow(const uint8_t* aIn) {
+  float* coeffsY = mState.mCoeffsY + mState.mInPos * 4;
 
-  if (aOs->mHasAlpha) {
-    ScaleDownBgra(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
-                  aOs->mBordersX, coeffsY, aOs->mSumsYTap);
+  if (mState.mHasAlpha) {
+    ScaleDownBgra(aIn, mState.mSumsY, mState.mOutWidth, mState.mCoeffsX,
+                  mState.mBordersX, coeffsY, mState.mSumsYTap);
   } else {
-    ScaleDownBgrx(aIn, aOs->mSumsY, aOs->mOutWidth, aOs->mCoeffsX,
-                  aOs->mBordersX, coeffsY, aOs->mSumsYTap);
+    ScaleDownBgrx(aIn, mState.mSumsY, mState.mOutWidth, mState.mCoeffsX,
+                  mState.mBordersX, coeffsY, mState.mSumsYTap);
   }
 
-  aOs->mBordersY[aOs->mOutPos] -= 1;
-  aOs->mInPos++;
-}
-
-StreamingScaler::StreamingScaler()
-    : mScaler{}, mBufferSize(0), mInitialized(false) {}
-
-StreamingScaler::~StreamingScaler() { Free(); }
-
-void StreamingScaler::Free() {
-  mBuffer = nullptr;
-  mBufferSize = 0;
-  mScaler = {};
-  mInitialized = false;
+  mState.mBordersY[mState.mOutPos] -= 1;
+  mState.mInPos++;
 }
 
 bool StreamingScaler::Init(const IntSize& aInputSize,
                            const IntSize& aOutputSize, SurfaceFormat aFormat) {
-  Free();
+  mBuffer = nullptr;
+  mState = {};
 
   switch (aFormat) {
     case SurfaceFormat::B8G8R8A8:
@@ -461,83 +451,79 @@ bool StreamingScaler::Init(const IntSize& aInputSize,
   memset(mBuffer.get(), 0, allocSize);
   mBufferSize = allocSize;
 
-  mScaler = {};
-  mScaler.mInHeight = inH;
-  mScaler.mOutHeight = outH;
-  mScaler.mInWidth = inW;
-  mScaler.mOutWidth = outW;
-  mScaler.mHasAlpha = !IsOpaque(aFormat);
-  mScaler.mBuf = mBuffer.get();
+  mState.mInHeight = inH;
+  mState.mOutHeight = outH;
+  mState.mInWidth = inW;
+  mState.mOutWidth = outW;
+  mState.mHasAlpha = !IsOpaque(aFormat);
 
-  DownscaleInit(&mScaler);
-
-  mInitialized = true;
+  InitCoefficients();
   return true;
 }
 
 int StreamingScaler::Slots() const {
-  MOZ_ASSERT(mInitialized);
-  return mScaler.mBordersY[mScaler.mOutPos];
+  MOZ_ASSERT(mBuffer);
+  return mState.mBordersY[mState.mOutPos];
 }
 
 void StreamingScaler::FeedRow(const uint8_t* aInputRow) {
-  MOZ_ASSERT(mInitialized);
+  MOZ_ASSERT(mBuffer);
   MOZ_ASSERT(Slots() > 0);
 
 #ifdef USE_SSE2
   if (mozilla::supports_avx2()) {
-    InAvx2(&mScaler, aInputRow);
+    InAvx2(&mState, aInputRow);
     return;
   }
   if (mozilla::supports_sse2()) {
-    InSse2(&mScaler, aInputRow);
+    InSse2(&mState, aInputRow);
     return;
   }
 #elif defined(USE_NEON)
   if (mozilla::supports_neon()) {
-    InNeon(&mScaler, aInputRow);
+    InNeon(&mState, aInputRow);
     return;
   }
 #endif
-  DownScaleIn(&mScaler, aInputRow);
+  ScaleInputRow(aInputRow);
 }
 
 void StreamingScaler::ProduceRow(uint8_t* aOutputRow) {
-  MOZ_ASSERT(mInitialized);
+  MOZ_ASSERT(mBuffer);
   MOZ_ASSERT(Slots() == 0);
 
 #ifdef USE_SSE2
   if (mozilla::supports_avx2()) {
-    OutAvx2(&mScaler, aOutputRow);
+    OutAvx2(&mState, aOutputRow);
     return;
   }
   if (mozilla::supports_sse2()) {
-    OutSse2(&mScaler, aOutputRow);
+    OutSse2(&mState, aOutputRow);
     return;
   }
 #elif defined(USE_NEON)
   if (mozilla::supports_neon()) {
-    OutNeon(&mScaler, aOutputRow);
+    OutNeon(&mState, aOutputRow);
     return;
   }
 #endif
-  YScaleOut(mScaler.mSumsY, mScaler.mOutWidth, aOutputRow, mScaler.mHasAlpha,
-            mScaler.mSumsYTap);
-  mScaler.mSumsYTap = (mScaler.mSumsYTap + 1) & 3;
-  mScaler.mOutPos++;
+  YScaleOut(mState.mSumsY, mState.mOutWidth, aOutputRow, mState.mHasAlpha,
+            mState.mSumsYTap);
+  mState.mSumsYTap = (mState.mSumsYTap + 1) & 3;
+  mState.mOutPos++;
 }
 
 bool StreamingScaler::OutputComplete() const {
-  MOZ_ASSERT(mInitialized);
-  return mScaler.mOutPos >= mScaler.mOutHeight;
+  MOZ_ASSERT(mBuffer);
+  return mState.mOutPos >= mState.mOutHeight;
 }
 
 void StreamingScaler::Reset() {
-  if (mInitialized) {
+  if (mBuffer) {
     memset(mBuffer.get(), 0, mBufferSize);
-    mScaler.mInPos = mScaler.mOutPos = 0;
-    mScaler.mSumsYTap = 0;
-    DownscaleInit(&mScaler);
+    mState.mInPos = mState.mOutPos = 0;
+    mState.mSumsYTap = 0;
+    InitCoefficients();
   }
 }
 

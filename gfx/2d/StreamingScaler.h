@@ -16,8 +16,8 @@ namespace gfx {
  */
 class StreamingScaler final {
  public:
-  StreamingScaler();
-  ~StreamingScaler();
+  StreamingScaler() = default;
+  ~StreamingScaler() = default;
 
   StreamingScaler(const StreamingScaler&) = delete;
   StreamingScaler& operator=(const StreamingScaler&) = delete;
@@ -29,34 +29,34 @@ class StreamingScaler final {
   void Reset();
 
   // Number of input rows the scaler can accept before producing output.
-  int Slots() const;
+  [[nodiscard]] int Slots() const;
   // Feed one input row to the scaler.
   void FeedRow(const uint8_t* aInputRow);
   // Produce one output row.
   void ProduceRow(uint8_t* aOutputRow);
   // True when all output rows have been produced.
-  bool OutputComplete() const;
+  [[nodiscard]] bool OutputComplete() const;
 
   struct State {
-    int32_t mInHeight;
-    int32_t mOutHeight;
-    int32_t mInWidth;
-    int32_t mOutWidth;
-    bool mHasAlpha;
-    int32_t mInPos;
-    int32_t mOutPos;
-    float* mCoeffsY;
-    float* mCoeffsX;
-    int* mBordersX;
-    int* mBordersY;
-    float* mSumsY;
-    float* mTmpCoeffs;
-    uint8_t* mBuf;
-    int32_t mSumsYTap;
+    int32_t mInHeight = 0;
+    int32_t mOutHeight = 0;
+    int32_t mInWidth = 0;
+    int32_t mOutWidth = 0;
+    bool mHasAlpha = false;
+    int32_t mInPos = 0;
+    int32_t mOutPos = 0;
+    float* mCoeffsY = nullptr;
+    float* mCoeffsX = nullptr;
+    int* mBordersX = nullptr;
+    int* mBordersY = nullptr;
+    float* mSumsY = nullptr;
+    float* mTmpCoeffs = nullptr;
+    int32_t mSumsYTap = 0;
   };
 
  private:
-  void Free();
+  void InitCoefficients();
+  void ScaleInputRow(const uint8_t* aIn);
 
 #ifdef USE_SSE2
   static void InSse2(State* aOs, const uint8_t* aIn);
@@ -70,10 +70,9 @@ class StreamingScaler final {
   static void OutNeon(State* aOs, uint8_t* aOut);
 #endif
 
-  State mScaler;
+  State mState;
   UniquePtr<uint8_t[]> mBuffer;
-  int mBufferSize;
-  bool mInitialized;
+  int mBufferSize = 0;
 };
 
 }  // namespace gfx
