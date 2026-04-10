@@ -455,7 +455,8 @@ static void YScaleOutSse2(float* aSums, int aWidth, uint8_t* aOut,
   }
 }
 
-static void DownScaleInSse2(StreamingScaler::State* aOs, const uint8_t* aIn) {
+void StreamingScaler::InSse2(State* aOs, const uint8_t* aIn) {
+  MOZ_ASSERT(aOs->mBordersY[aOs->mOutPos] != 0);
   float* coeffsY = aOs->mCoeffsY + aOs->mInPos * 4;
 
   if (aOs->mHasAlpha) {
@@ -468,11 +469,6 @@ static void DownScaleInSse2(StreamingScaler::State* aOs, const uint8_t* aIn) {
 
   aOs->mBordersY[aOs->mOutPos] -= 1;
   aOs->mInPos++;
-}
-
-void StreamingScaler::InSse2(State* aOs, const uint8_t* aIn) {
-  MOZ_ASSERT(aOs->mBordersY[aOs->mOutPos] != 0);
-  DownScaleInSse2(aOs, aIn);
 }
 
 void StreamingScaler::OutSse2(State* aOs, uint8_t* aOut) {
