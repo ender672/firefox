@@ -21,10 +21,7 @@ namespace mozilla {
 namespace gfx {
 
 /* static */
-void StreamingScaler::EnsureGlobalInit() {
-  static std::once_flag sOnce;
-  std::call_once(sOnce, [] { oil_global_init(); });
-}
+void StreamingScaler::EnsureGlobalInit() {}
 
 StreamingScaler::StreamingScaler() : mBufferSize(0), mInitialized(false) {
   memset(&mScaler, 0, sizeof(mScaler));
@@ -34,9 +31,7 @@ StreamingScaler::~StreamingScaler() { Free(); }
 
 void StreamingScaler::Free() {
   if (mInitialized) {
-    // We own the buffer, so don't call oil_scale_free() which would
-    // free() it. Just clear the struct and release our buffer.
-    memset(&mScaler, 0, sizeof(mScaler));
+    OilScaleFree(&mScaler);
     mInitialized = false;
   }
   mBuffer = nullptr;
@@ -47,9 +42,8 @@ bool StreamingScaler::Init(int32_t aInputWidth, int32_t aInputHeight,
                            int32_t aOutputWidth, int32_t aOutputHeight,
                            SurfaceFormat aFormat) {
   Free();
-  EnsureGlobalInit();
 
-  oil_colorspace cs;
+  OilColorspace cs;
   switch (aFormat) {
     case SurfaceFormat::B8G8R8A8:
     case SurfaceFormat::B8G8R8X8:
@@ -58,14 +52,14 @@ bool StreamingScaler::Init(int32_t aInputWidth, int32_t aInputHeight,
       // These are all 4-component; resampling is channel-independent
       // so byte order doesn't matter. Use RGBX for opaque to skip alpha
       // premultiply.
-      cs = IsOpaque(aFormat) ? OIL_CS_RGBX_NOGAMMA : OIL_CS_RGBA_NOGAMMA;
+      cs = IsOpaque(aFormat) ? OilColorspace::Bgrx : OilColorspace::Bgra;
       break;
     default:
       return false;
   }
 
-  int allocSize = oil_scale_alloc_size(aInputHeight, aOutputHeight,
-                                       aInputWidth, aOutputWidth, cs);
+  int allocSize =
+      OilScaleAllocSize(aInputHeight, aOutputHeight, aInputWidth, aOutputWidth, cs);
   if (allocSize <= 0) {
     return false;
   }
@@ -77,9 +71,8 @@ bool StreamingScaler::Init(int32_t aInputWidth, int32_t aInputHeight,
   memset(mBuffer.get(), 0, allocSize);
   mBufferSize = allocSize;
 
-  int ret = oil_scale_init_allocated(&mScaler, aInputHeight, aOutputHeight,
-                                     aInputWidth, aOutputWidth, cs,
-                                     mBuffer.get());
+  int ret = OilScaleInitAllocated(&mScaler, aInputHeight, aOutputHeight,
+                                  aInputWidth, aOutputWidth, cs, mBuffer.get());
   if (ret != 0) {
     mBuffer = nullptr;
     mBufferSize = 0;
@@ -92,7 +85,7 @@ bool StreamingScaler::Init(int32_t aInputWidth, int32_t aInputHeight,
 
 int StreamingScaler::Slots() const {
   MOZ_ASSERT(mInitialized);
-  return oil_scale_slots(const_cast<oil_scale*>(&mScaler));
+  return OilScaleSlots(const_cast<OilScale*>(&mScaler));
 }
 
 void StreamingScaler::FeedRow(const uint8_t* aInputRow) {
@@ -100,53 +93,53 @@ void StreamingScaler::FeedRow(const uint8_t* aInputRow) {
   unsigned char* in = const_cast<unsigned char*>(aInputRow);
 #ifdef USE_SSE2
   if (mozilla::supports_avx2()) {
-    oil_scale_in_avx2(&mScaler, in);
+    (void)OilScaleInAvx2(&mScaler, in);
     return;
   }
   if (mozilla::supports_sse2()) {
-    oil_scale_in_sse2(&mScaler, in);
+    (void)OilScaleInSse2(&mScaler, in);
     return;
   }
 #elif defined(USE_NEON)
   if (mozilla::supports_neon()) {
-    oil_scale_in_neon(&mScaler, in);
+    (void)OilScaleInNeon(&mScaler, in);
     return;
   }
 #endif
-  oil_scale_in(&mScaler, in);
+  (void)OilScaleIn(&mScaler, in);
 }
 
 void StreamingScaler::ProduceRow(uint8_t* aOutputRow) {
   MOZ_ASSERT(mInitialized);
 #ifdef USE_SSE2
   if (mozilla::supports_avx2()) {
-    oil_scale_out_avx2(&mScaler, aOutputRow);
+    (void)OilScaleOutAvx2(&mScaler, aOutputRow);
     return;
   }
   if (mozilla::supports_sse2()) {
-    oil_scale_out_sse2(&mScaler, aOutputRow);
+    (void)OilScaleOutSse2(&mScaler, aOutputRow);
     return;
   }
 #elif defined(USE_NEON)
   if (mozilla::supports_neon()) {
-    oil_scale_out_neon(&mScaler, aOutputRow);
+    (void)OilScaleOutNeon(&mScaler, aOutputRow);
     return;
   }
 #endif
-  oil_scale_out(&mScaler, aOutputRow);
+  (void)OilScaleOut(&mScaler, aOutputRow);
 }
 
 bool StreamingScaler::OutputComplete() const {
   MOZ_ASSERT(mInitialized);
-  return mScaler.out_pos >= mScaler.out_height;
+  return mScaler.mOutPos >= mScaler.mOutHeight;
 }
 
 void StreamingScaler::Reset() {
   if (mInitialized) {
     memset(mBuffer.get(), 0, mBufferSize);
-    int ret = oil_scale_init_allocated(
-        &mScaler, mScaler.in_height, mScaler.out_height, mScaler.in_width,
-        mScaler.out_width, mScaler.cs, mBuffer.get());
+    int ret = OilScaleInitAllocated(&mScaler, mScaler.mInHeight, mScaler.mOutHeight,
+                                    mScaler.mInWidth, mScaler.mOutWidth,
+                                    mScaler.mCs, mBuffer.get());
     if (ret != 0) {
       mInitialized = false;
     }

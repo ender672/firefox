@@ -65,6 +65,4 @@ external_dirs += [
     "media/psshparser",
 ]
 
-external_dirs += ["third_party/liboil"]
-
 DIRS += ["../../" + i for i in external_dirs]

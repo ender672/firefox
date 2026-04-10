@@ -141,7 +141,6 @@ LOCAL_INCLUDES += [
     "/dom/base",
     "/gfx/2d",
     "/image",
-    "/third_party/liboil",
 ]
 
 LOCAL_INCLUDES += CONFIG["SKIA_INCLUDES"]

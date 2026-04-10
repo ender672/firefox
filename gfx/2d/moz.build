@@ -124,6 +124,8 @@ if CONFIG["INTEL_ARCHITECTURE"]:
         "ConvolutionFilterSSE2.cpp",
         "FilterProcessingSSE2.cpp",
         "ImageScalingSSE2.cpp",
+        "OilResampleAvx2.cpp",
+        "OilResampleSse2.cpp",
         "SwizzleAVX2.cpp",
         "SwizzleSSE2.cpp",
         "SwizzleSSSE3.cpp",
@@ -135,6 +137,8 @@ if CONFIG["INTEL_ARCHITECTURE"]:
     SOURCES["ConvolutionFilterSSE2.cpp"].flags += CONFIG["SSE2_FLAGS"]
     SOURCES["FilterProcessingSSE2.cpp"].flags += CONFIG["SSE2_FLAGS"]
     SOURCES["ImageScalingSSE2.cpp"].flags += CONFIG["SSE2_FLAGS"]
+    SOURCES["OilResampleAvx2.cpp"].flags += ["-mavx2", "-mfma"]
+    SOURCES["OilResampleSse2.cpp"].flags += CONFIG["SSE2_FLAGS"]
     SOURCES["SwizzleAVX2.cpp"].flags += ["-mavx2"]
     SOURCES["SwizzleSSE2.cpp"].flags += CONFIG["SSE2_FLAGS"]
     SOURCES["SwizzleSSSE3.cpp"].flags += CONFIG["SSSE3_FLAGS"]
@@ -160,6 +164,7 @@ UNIFIED_SOURCES += [
     "ImageScaling.cpp",
     "Matrix.cpp",
     "NativeFontResource.cpp",
+    "OilResample.cpp",
     "Path.cpp",
     "PathCairo.cpp",
     "PathHelpers.cpp",
@@ -186,11 +191,13 @@ if CONFIG["TARGET_CPU"] == "aarch64" or CONFIG["BUILD_ARM_NEON"]:
     SOURCES += [
         "ConvolutionFilterNEON.cpp",
         "LuminanceNEON.cpp",
+        "OilResampleNeon.cpp",
         "SwizzleNEON.cpp",
     ]
     DEFINES["USE_NEON"] = True
     SOURCES["ConvolutionFilterNEON.cpp"].flags += CONFIG["NEON_FLAGS"]
     SOURCES["LuminanceNEON.cpp"].flags += CONFIG["NEON_FLAGS"]
+    SOURCES["OilResampleNeon.cpp"].flags += CONFIG["NEON_FLAGS"]
     SOURCES["SwizzleNEON.cpp"].flags += CONFIG["NEON_FLAGS"]
 
 include("/ipc/chromium/chromium-config.mozbuild")
@@ -211,5 +218,4 @@ if CONFIG["MOZ_WIDGET_TOOLKIT"] in ("android", "gtk"):
 LOCAL_INCLUDES += CONFIG["SKIA_INCLUDES"]
 LOCAL_INCLUDES += [
     "/gfx/cairo/cairo/src",
-    "/third_party/liboil",
 ]

@@ -7,10 +7,7 @@
 
 #include "mozilla/gfx/2D.h"
 #include "mozilla/UniquePtr.h"
-
-extern "C" {
-#include "oil_resample.h"
-}
+#include "OilResample.h"
 
 namespace mozilla {
 namespace gfx {
@@ -53,7 +50,7 @@ class StreamingScaler {
  private:
   static void EnsureGlobalInit();
 
-  oil_scale mScaler;
+  OilScale mScaler;
   UniquePtr<uint8_t[]> mBuffer;
   int mBufferSize;
   bool mInitialized;
