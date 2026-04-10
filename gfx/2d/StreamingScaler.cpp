@@ -4,7 +4,6 @@
 
 #include "StreamingScaler.h"
 
-#include <mutex>
 #include <cstring>
 
 #include "mozilla/fallible.h"
@@ -20,12 +19,7 @@
 namespace mozilla {
 namespace gfx {
 
-/* static */
-void StreamingScaler::EnsureGlobalInit() {}
-
-StreamingScaler::StreamingScaler() : mBufferSize(0), mInitialized(false) {
-  memset(&mScaler, 0, sizeof(mScaler));
-}
+StreamingScaler::StreamingScaler() : mScaler{}, mBufferSize(0), mInitialized(false) {}
 
 StreamingScaler::~StreamingScaler() { Free(); }
 

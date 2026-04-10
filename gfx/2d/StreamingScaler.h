@@ -48,8 +48,6 @@ class StreamingScaler {
   bool OutputComplete() const;
 
  private:
-  static void EnsureGlobalInit();
-
   OilScale mScaler;
   UniquePtr<uint8_t[]> mBuffer;
   int mBufferSize;
