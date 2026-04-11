@@ -8598,7 +8598,7 @@
   value: true
   mirror: always
 
-- name: image.downscaler.use-oil
+- name: image.downscaler.use-streaming-scaler
   type: RelaxedAtomicBool
   value: false
   mirror: always
