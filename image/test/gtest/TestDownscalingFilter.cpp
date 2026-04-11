@@ -18,13 +18,13 @@ using namespace mozilla::gfx;
 using namespace mozilla::image;
 
 static void ForEachBackend(std::function<void()> aFunc) {
-  Preferences::SetBool("image.downscaler.use-oil", false);
+  Preferences::SetBool("image.downscaler.use-streaming-scaler", false);
   aFunc();
 
-  Preferences::SetBool("image.downscaler.use-oil", true);
+  Preferences::SetBool("image.downscaler.use-streaming-scaler", true);
   aFunc();
 
-  Preferences::SetBool("image.downscaler.use-oil", false);
+  Preferences::SetBool("image.downscaler.use-streaming-scaler", false);
 }
 
 template <typename Func>

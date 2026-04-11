@@ -65,7 +65,7 @@ class DownscalingFilter final : public SurfaceFilter {
         mInputRow(0),
         mOutputRow(0),
         mFormat(gfx::SurfaceFormat::UNKNOWN),
-        mUseOil(false) {}
+        mUseStreamingScaler(false) {}
 
   ~DownscalingFilter() { ReleaseWindow(); }
 
@@ -99,16 +99,16 @@ class DownscalingFilter final : public SurfaceFilter {
         gfx::MatrixScalesDouble(double(mInputSize.width) / outputSize.width,
                                 double(mInputSize.height) / outputSize.height);
     mFormat = aConfig.mFormat;
-    mUseOil = StaticPrefs::image_downscaler_use_oil();
+    mUseStreamingScaler = StaticPrefs::image_downscaler_use_streaming_scaler();
 
-    if (mUseOil) {
-      if (!mOilDownscaler.Init(mInputSize, outputSize, aConfig.mFormat)) {
-        NS_WARNING("Failed to initialize liboil downscaler, falling back");
-        mUseOil = false;
+    if (mUseStreamingScaler) {
+      if (!mStreamingScaler.Init(mInputSize, outputSize, aConfig.mFormat)) {
+        NS_WARNING("Failed to initialize StreamingScaler, falling back");
+        mUseStreamingScaler = false;
       }
     }
 
-    if (!mUseOil) {
+    if (!mUseStreamingScaler) {
       ReleaseWindow();
 
       auto resizeMethod = gfx::ConvolutionFilter::ResizeMethod::LANCZOS3;
@@ -131,7 +131,7 @@ class DownscalingFilter final : public SurfaceFilter {
     // Clear the buffer to avoid writing uninitialized memory to the output.
     memset(mRowBuffer.get(), 0, PaddedWidthInBytes(mInputSize.width));
 
-    if (!mUseOil) {
+    if (!mUseStreamingScaler) {
       // Allocate the window, which contains horizontally downscaled scanlines.
       // (We can store scanlines which are already downscaled because our
       // downscaling filter is separable.)
@@ -181,8 +181,8 @@ class DownscalingFilter final : public SurfaceFilter {
     mOutputRow = 0;
     mRowsInWindow = 0;
 
-    if (mUseOil) {
-      mOilDownscaler.Reset();
+    if (mUseStreamingScaler) {
+      mStreamingScaler.Reset();
     }
 
     return GetRowPointer();
@@ -199,8 +199,8 @@ class DownscalingFilter final : public SurfaceFilter {
       return nullptr;
     }
 
-    if (mUseOil) {
-      OilAdvanceRow(aInputRow);
+    if (mUseStreamingScaler) {
+      StreamingScalerAdvanceRow(aInputRow);
       mInputRow++;
       return mInputRow < mInputSize.height ? GetRowPointer() : nullptr;
     }
@@ -293,17 +293,17 @@ class DownscalingFilter final : public SurfaceFilter {
     }
   }
 
-  void OilAdvanceRow(const uint8_t* aInputRow) {
-    MOZ_ASSERT(mUseOil);
+  void StreamingScalerAdvanceRow(const uint8_t* aInputRow) {
+    MOZ_ASSERT(mUseStreamingScaler);
 
-    if (mOilDownscaler.Slots() > 0) {
-      mOilDownscaler.FeedRow(aInputRow);
+    if (mStreamingScaler.Slots() > 0) {
+      mStreamingScaler.FeedRow(aInputRow);
     }
 
-    while (mOilDownscaler.Slots() == 0 && !mOilDownscaler.OutputComplete()) {
+    while (mStreamingScaler.Slots() == 0 && !mStreamingScaler.OutputComplete()) {
       mNext.template WriteUnsafeComputedRow<uint32_t>(
           [&](uint32_t* aRow, uint32_t aLength) {
-            mOilDownscaler.ProduceRow(reinterpret_cast<uint8_t*>(aRow));
+            mStreamingScaler.ProduceRow(reinterpret_cast<uint8_t*>(aRow));
           });
       mOutputRow++;
     }
@@ -343,8 +343,8 @@ class DownscalingFilter final : public SurfaceFilter {
 
   gfx::SurfaceFormat mFormat;  /// The image format
 
-  gfx::StreamingScaler mOilDownscaler;
-  bool mUseOil;
+  gfx::StreamingScaler mStreamingScaler;
+  bool mUseStreamingScaler;
 };
 
 }  // namespace mozilla::image
