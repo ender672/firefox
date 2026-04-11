@@ -28,7 +28,8 @@
 
 #include "SurfacePipe.h"
 
-namespace mozilla::image {
+namespace mozilla {
+namespace image {
 
 //////////////////////////////////////////////////////////////////////////////
 // DownscalingFilter
@@ -347,6 +348,7 @@ class DownscalingFilter final : public SurfaceFilter {
   bool mUseStreamingScaler;
 };
 
-}  // namespace mozilla::image
+}  // namespace image
+}  // namespace mozilla
 
 #endif  // mozilla_image_DownscalingFilter_h
