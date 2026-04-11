@@ -469,21 +469,10 @@ bool StreamingScaler::OutputComplete() const {
 
 void StreamingScaler::Reset() {
   if (mBordersY) {
-    int inW = mState.mInWidth;
-    int outW = mState.mOutWidth;
-    int inH = mState.mInHeight;
-    int outH = mState.mOutHeight;
-    int tapsX = CalcTaps(inW, outW);
-    int tapsY = CalcTaps(inH, outH);
-
-    mCoeffsX.Realloc(kTaps * std::max(inW, outW), true);
-    mBordersX.Realloc(std::min(inW, outW), true);
-    mCoeffsY.Realloc(kTaps * std::max(inH, outH), true);
-    mBordersY.Realloc(std::min(inH, outH), true);
-    mSumsY.Realloc(outW * 4 * kTaps, true);
-    mTmpCoeffs.Realloc(std::max(tapsX, tapsY), true);
     mState.mInPos = mState.mOutPos = 0;
     mState.mSumsYTap = 0;
+    memset(static_cast<float*>(mSumsY), 0,
+           sizeof(float) * mState.mOutWidth * 4 * kTaps);
     InitCoefficients();
   }
 }
